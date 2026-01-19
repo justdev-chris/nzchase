@@ -2,152 +2,148 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Run from Nextbots</title>
+<title>Nextbot Runner</title>
 <style>
-  html, body { margin:0; padding:0; overflow:hidden; background:#111; font-family:sans-serif; color:white; }
-  #homepage { position:absolute; top:0; left:0; width:100%; height:100%; background:#222; display:flex; flex-direction:column; justify-content:center; align-items:center; }
-  input, button { margin:5px; padding:8px; font-size:16px; }
-  #game { display:none; width:100%; height:100%; }
+  body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+  #menu {
+    position: absolute;
+    inset: 0;
+    background: #111;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+  }
+  button {
+    padding: 10px 20px;
+    font-size: 18px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
 
-<div id="homepage">
-  <h1>Run from Nextbots</h1>
-  <label>Upload Map (.glb/.gltf)</label>
-  <input type="file" id="mapInput" accept=".glb,.gltf"><br>
-  <label>Upload Nextbot Image(s)</label>
-  <input type="file" id="nextbotImgInput" accept="image/*" multiple><br>
+<div id="menu">
+  <h1>Nextbot Runner</h1>
+  <input type="file" id="imgInput" accept="image/*">
   <button id="playBtn">Play</button>
+  <p>WASD to move • Mouse to look</p>
 </div>
 
-<canvas id="game"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
 
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+<script>
+let scene, camera, renderer, controls;
+let bot;
+let velocityY = 0;
+const gravity = -0.02;
+const floorY = 1.6;
 
-// ====== SCENE & CAMERA ======
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-camera.position.set(0, 2, 5);
+document.getElementById("playBtn").onclick = () => {
+  const file = document.getElementById("imgInput").files[0];
+  if (!file) return alert("Upload a nextbot image first");
 
-const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('game'), antialias:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
+  document.getElementById("menu").style.display = "none";
+  init(URL.createObjectURL(file));
+};
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enablePan = false;
-controls.enableZoom = false;
+function init(imgURL) {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x202020);
 
-// ====== LIGHT ======
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5,10,5);
-scene.add(light);
-scene.add(new THREE.AmbientLight(0x555555));
+  camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
+  camera.position.set(0, floorY, 5);
 
-// ====== PLAYER ======
-const player = { mesh: new THREE.Object3D(), speed:0.1 };
-scene.add(player.mesh);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  document.body.appendChild(renderer.domElement);
 
-// ====== MAP ======
-const mapLoader = new GLTFLoader();
-let mapLoaded = false;
-let mapFile = null;
+  controls = new THREE.PointerLockControls(camera, document.body);
+  document.body.addEventListener("click", () => controls.lock());
+  scene.add(controls.getObject());
 
-document.getElementById('mapInput').addEventListener('change', e=>{
-  mapFile = e.target.files[0];
-});
+  // LIGHT
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const light = new THREE.DirectionalLight(0xffffff, 0.6);
+  light.position.set(5, 10, 5);
+  scene.add(light);
 
-// ====== NEXTBOTS ======
-const nextbots = [];
-const nextbotGeometry = new THREE.PlaneGeometry(1,1);
-let nextbotFiles = [];
+  // FLOOR
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(100, 1, 100),
+    new THREE.MeshStandardMaterial({ color: 0x444444 })
+  );
+  floor.position.y = 0;
+  scene.add(floor);
 
-document.getElementById('nextbotImgInput').addEventListener('change', e=>{
-  nextbotFiles = Array.from(e.target.files);
-});
+  // WALLS
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+  const wallGeo = new THREE.BoxGeometry(100, 10, 1);
 
-// ====== START GAME ======
-document.getElementById('playBtn').addEventListener('click', ()=>{
-  if(!mapFile || nextbotFiles.length===0){ alert("Upload map and at least 1 nextbot!"); return; }
-  
-  document.getElementById('homepage').style.display = 'none';
-  document.getElementById('game').style.display = 'block';
-  
-  // load map
-  const url = URL.createObjectURL(mapFile);
-  mapLoader.load(url, gltf=>{
-    scene.add(gltf.scene);
-    mapLoaded = true;
+  const walls = [
+    [0, 5, -50], [0, 5, 50],
+    [-50, 5, 0], [50, 5, 0]
+  ];
+
+  walls.forEach(p => {
+    const w = new THREE.Mesh(wallGeo, wallMat);
+    w.position.set(...p);
+    if (p[0] !== 0) w.rotation.y = Math.PI / 2;
+    scene.add(w);
   });
-  
-  // load nextbots
-  nextbotFiles.forEach(file=>{
-    const url = URL.createObjectURL(file);
-    const texture = new THREE.TextureLoader().load(url, tex=>{
-      tex.needsUpdate = true;
-      const aspect = tex.image.width/tex.image.height;
-      nextbotGeometry.scale(aspect, 1, 1);
-    });
-    const material = new THREE.MeshBasicMaterial({map:texture, transparent:true});
-    const mesh = new THREE.Mesh(nextbotGeometry.clone(), material);
-    mesh.position.set(Math.random()*10-5,1,Math.random()*10-5);
-    scene.add(mesh);
-    nextbots.push(mesh);
-  });
-  
+
+  // NEXTBOT
+  const tex = new THREE.TextureLoader().load(imgURL);
+  const aspect = tex.image.width / tex.image.height;
+  const botGeo = new THREE.PlaneGeometry(3 * aspect, 3);
+  const botMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+  bot = new THREE.Mesh(botGeo, botMat);
+  bot.position.set(0, 1.5, -20);
+  scene.add(bot);
+
   animate();
-});
+}
 
-// ====== PLAYER CONTROLS ======
 const keys = {};
-document.addEventListener('keydown', e=>keys[e.code]=true);
-document.addEventListener('keyup', e=>keys[e.code]=false);
+onkeydown = e => keys[e.key.toLowerCase()] = true;
+onkeyup = e => keys[e.key.toLowerCase()] = false;
 
-document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
-document.body.onclick = ()=>document.body.requestPointerLock();
-
-document.addEventListener('mousemove', e=>{
-  if(document.pointerLockElement === document.body){
-    player.mesh.rotation.y -= e.movementX * 0.002;
-    camera.rotation.x -= e.movementY * 0.002;
-    camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
-  }
-});
-
-// ====== GAME LOOP ======
-function animate(){
+function animate() {
   requestAnimationFrame(animate);
 
-  // player movement
-  let dir = new THREE.Vector3();
-  if(keys['KeyW']) dir.z -= 1;
-  if(keys['KeyS']) dir.z += 1;
-  if(keys['KeyA']) dir.x -= 1;
-  if(keys['KeyD']) dir.x += 1;
-  dir.applyEuler(player.mesh.rotation).normalize();
-  player.mesh.position.addScaledVector(dir, player.speed);
-  camera.position.copy(player.mesh.position).add(new THREE.Vector3(0,1.5,0));
+  if (controls?.isLocked) {
+    const speed = 0.15;
+    if (keys["w"]) controls.moveForward(speed);
+    if (keys["s"]) controls.moveForward(-speed);
+    if (keys["a"]) controls.moveRight(-speed);
+    if (keys["d"]) controls.moveRight(speed);
 
-  // nextbots chase
-  nextbots.forEach(bot=>{
-    const dir = new THREE.Vector3().subVectors(player.mesh.position, bot.position);
-    if(dir.length()>0.1) dir.normalize().multiplyScalar(0.05);
-    bot.position.add(dir);
-  });
+    // gravity
+    velocityY += gravity;
+    camera.position.y += velocityY;
+    if (camera.position.y < floorY) {
+      camera.position.y = floorY;
+      velocityY = 0;
+    }
+
+    // nextbot chase
+    const dir = new THREE.Vector3();
+    dir.subVectors(camera.position, bot.position).normalize();
+    bot.position.add(dir.multiplyScalar(0.05));
+    bot.lookAt(camera.position);
+  }
 
   renderer.render(scene, camera);
 }
 
-// ====== RESIZE ======
-window.addEventListener('resize', ()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
+onresize = () => {
+  camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(innerWidth, innerHeight);
+};
 </script>
-
 </body>
 </html>
