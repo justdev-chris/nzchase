@@ -7,10 +7,13 @@ const gravity = -0.03;
 const floorY = 2.0;
 let isOnGround = true;
 let playerHealth = 100;
+
+// SPEED VARIABLES - FIXED
 let basePlayerSpeed = 0.35;
-let maxSpeed = 0.50;
-let acceleration = 0.40;
+let maxSpeed = 0.35;
+let acceleration = 0.15;
 let friction = 0.9;
+
 let baseBotSpeed = 0.3;
 let mouseSensitivity = 0.002;
 let yaw = 0;
@@ -49,12 +52,17 @@ function setupEventListeners() {
     // Enable play button when nextbot image is uploaded
     nextbotImageInput.addEventListener('change', updatePlayButton);
     
-    // PLAYER SPEED SLIDER - FIXED
+    // PLAYER SPEED SLIDER - FIXED PROPERLY
     const playerSpeedSlider = document.getElementById('playerSpeed');
     playerSpeedSlider.addEventListener('input', (e) => {
         playerSpeedMultiplier = e.target.value / 100;
         document.getElementById('playerSpeedValue').textContent = e.target.value + '%';
         console.log("Player Speed Multiplier:", playerSpeedMultiplier);
+        
+        // Update speed immediately for testing
+        basePlayerSpeed = 0.35 * playerSpeedMultiplier;
+        maxSpeed = basePlayerSpeed;
+        console.log("Updated basePlayerSpeed to:", basePlayerSpeed);
     });
     
     // JUMP HEIGHT SLIDER
@@ -425,7 +433,7 @@ function animate() {
     document.getElementById('time').textContent = Math.floor(gameTime);
     
     if (isMouseLocked) {
-        // Player movement - PLAYER SPEED SLIDER AFFECTS THIS
+        // Player movement - FIXED: Don't reset velocity each frame
         const forward = new THREE.Vector3();
         const right = new THREE.Vector3();
         
@@ -435,25 +443,25 @@ function animate() {
         
         right.crossVectors(camera.up, forward).normalize();
         
-        velocity.x = 0;
-        velocity.z = 0;
+        // Apply friction first
+        velocity.multiplyScalar(friction);
         
+        // Then add acceleration based on keys
         if (keys["w"]) velocity.add(forward.clone().multiplyScalar(acceleration));
         if (keys["s"]) velocity.add(forward.clone().multiplyScalar(-acceleration));
         if (keys["a"]) velocity.add(right.clone().multiplyScalar(acceleration));
         if (keys["d"]) velocity.add(right.clone().multiplyScalar(-acceleration));
         
-        velocity.multiplyScalar(friction);
-        
+        // Cap speed based on current maxSpeed (affected by player speed slider)
         if (velocity.length() > maxSpeed) {
             velocity.normalize().multiplyScalar(maxSpeed);
         }
         
-        // THIS IS WHERE PLAYER SPEED SLIDER TAKES EFFECT
+        // Move camera - THIS IS WHERE PLAYER SPEED SLIDER TAKES EFFECT
         camera.position.add(velocity);
         
-        // Update HUD speed display
-        const currentSpeed = Math.round(velocity.length() * 100);
+        // Update HUD speed display - SHOW ACTUAL SPEED
+        const currentSpeed = Math.round(velocity.length() * 200); // Changed from 100 to 200 for better visibility
         document.getElementById('speed').textContent = currentSpeed;
         
         // Player gravity and jumping - JUMP HEIGHT SLIDER WORKS
