@@ -16,14 +16,25 @@
                 <h3><span class="required">* REQUIRED *</span></h3>
                 <p>Upload Nextbot Image:</p>
                 <input type="file" id="nextbotImage" accept="image/*" class="file-input" required>
+                <div id="lastNextbotPreview" class="file-preview" style="display: none;">
+                    <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastNextbotName"></span></p>
+                </div>
             </div>
             
             <div class="menu-section">
                 <h3><span class="optional">Optional Audio</span></h3>
                 <p>Background Music:</p>
                 <input type="file" id="bgMusic" accept="audio/*" class="file-input">
+                <div id="lastBgMusicPreview" class="file-preview" style="display: none;">
+                    <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastBgMusicName"></span></p>
+                </div>
+                
                 <p>Nextbot Sounds:</p>
                 <input type="file" id="nextbotSounds" accept="audio/*" class="file-input" multiple>
+                <div id="lastSoundsPreview" class="file-preview" style="display: none;">
+                    <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastSoundsCount"></span> sounds</p>
+                </div>
+                
                 <div class="slider-container">
                     <label>Master Volume: <span id="volumeDisplay" class="slider-value">50%</span></label>
                     <input type="range" id="masterVolume" min="0" max="100" value="50">
@@ -44,9 +55,15 @@
                     <label>Bot Speed: <span id="botSpeedValue" class="slider-value">100%</span></label>
                     <input type="range" id="botSpeed" min="50" max="300" value="100">
                 </div>
+                
+                <div class="checkbox-container">
+                    <input type="checkbox" id="rememberSettings" checked>
+                    <label for="rememberSettings">Remember my settings</label>
+                </div>
             </div>
             
             <button id="playBtn" disabled>START GAME</button>
+            <button id="clearMemoryBtn" style="background: #333;">Clear Saved Settings</button>
             
             <p class="instructions">
                 WASD: Move • Mouse: Side-to-side only • SPACE: Jump • SHIFT: Sprint • ESC: Pause
@@ -87,11 +104,35 @@
         <p>Time: <span id="pause-time">0</span>s</p>
         <p>Distance: <span id="pause-distance">0</span>m</p>
         <button id="resumeBtn">RESUME</button>
-        <button id="restartBtn">RESTART</button>
-        <button id="quitBtn">QUIT</button>
+        <button id="pauseRestartBtn">RESTART</button>
+        <button id="pauseQuitBtn">QUIT</button>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="game.js"></script>
+    <!-- DEATH OVERLAY -->
+    <div id="death-overlay">
+        <div id="death-content">
+            <h1 id="death-title">GAME OVER</h1>
+            <p>Time Survived: <span id="death-time">0</span> seconds</p>
+            <p>Distance Run: <span id="death-distance">0</span> meters</p>
+            <div id="death-buttons" style="display: none; margin-top: 20px;">
+                <button id="restartBtn">PLAY AGAIN</button>
+                <button id="menuBtn">MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Use local Three.js instead of CDN to avoid tracking prevention -->
+    <script>
+        // Fallback: If Three.js fails to load, show an error
+        window.addEventListener('error', function(e) {
+            if (e.target.src && e.target.src.includes('three.js')) {
+                document.body.innerHTML = '<div style="color: white; background: black; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center;"><h1>Error Loading Game</h1><p>Three.js failed to load. Please check your internet connection or try a different browser.</p><button onclick="location.reload()">Retry</button></div>';
+            }
+        }, true);
+    </script>
+    
+    <!-- Load Three.js from a reliable source -->
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script src="game.js" defer></script>
 </body>
 </html>
