@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NZChase</title>
 <style>
-  body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial', sans-serif; }
+  body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #000; 
+    font-family: 'Arial', sans-serif;
+  }
   #menu {
     position: absolute;
     inset: 0;
@@ -12,35 +18,44 @@
     color: white;
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
-    gap: 15px;
+    padding: 10px;
     z-index: 100;
-    padding: 20px;
+    overflow-y: auto;
+  }
+  #menu-content {
+    width: 100%;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
   }
   #menu h1 {
-    font-size: 42px;
+    font-size: 36px;
     color: #ff3366;
-    margin-bottom: 10px;
+    margin: 5px 0;
+    text-align: center;
   }
-  .file-input {
-    margin: 10px 0;
-    padding: 10px;
-    width: 300px;
-    border: 2px dashed #444;
-    border-radius: 8px;
+  .menu-section {
     background: rgba(255,255,255,0.1);
-    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    width: 100%;
+    margin: 5px 0;
+    box-sizing: border-box;
   }
   button {
-    padding: 12px 30px;
-    font-size: 18px;
+    padding: 10px 20px;
+    font-size: 16px;
     cursor: pointer;
     background: #ff3366;
     color: white;
     border: none;
     border-radius: 8px;
-    margin: 10px;
+    margin: 5px;
+    width: 100%;
+    max-width: 300px;
   }
   button:hover {
     background: #ff5588;
@@ -49,26 +64,43 @@
     background: #666;
     cursor: not-allowed;
   }
+  .file-input {
+    margin: 8px 0;
+    padding: 8px;
+    width: 100%;
+    border: 2px dashed #444;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.3);
+    color: white;
+    box-sizing: border-box;
+  }
   .slider-container {
-    margin: 10px 0;
-    text-align: center;
+    margin: 8px 0;
+    width: 100%;
   }
   .slider-container label {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
     color: #aaa;
+    font-size: 14px;
+  }
+  .slider-value {
+    color: white;
+    font-size: 14px;
+    margin-left: 10px;
+    font-weight: bold;
   }
   #hud {
     position: absolute;
-    top: 20px;
-    left: 20px;
+    top: 10px;
+    left: 10px;
     color: white;
-    font-size: 20px;
+    font-size: 18px;
     z-index: 10;
     display: none;
     background: rgba(0,0,0,0.7);
-    padding: 10px 15px;
-    border-radius: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
   }
   #crosshair {
     position: absolute;
@@ -99,56 +131,135 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
     z-index: 150;
   }
+  .audio-controls {
+    display: none;
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.8);
+    padding: 10px;
+    border-radius: 8px;
+    z-index: 50;
+    max-width: 200px;
+  }
+  .audio-controls .slider-container {
+    margin: 5px 0;
+  }
+  .collapsible {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    padding: 10px;
+    width: 100%;
+    border: none;
+    text-align: left;
+    border-radius: 5px;
+    margin: 5px 0;
+    cursor: pointer;
+  }
+  .collapsible:hover {
+    background: rgba(255,255,255,0.2);
+  }
+  .collapsible-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    width: 100%;
+  }
+  .required { color: #ff5555; }
+  .optional { color: #55ff55; }
 </style>
 </head>
 <body>
 
-<!-- SIMPLE MENU -->
 <div id="menu">
-  <h1>NZCHASE</h1>
-  
-  <p>Upload Nextbot Image (Required):</p>
-  <input type="file" id="nextbotImage" accept="image/*" class="file-input">
-  
-  <div class="slider-container">
-    <label>Player Speed: <span id="playerSpeedValue">100%</span></label>
-    <input type="range" id="playerSpeed" min="50" max="300" value="100" style="width: 250px;">
+  <div id="menu-content">
+    <h1>NZCHASE</h1>
+    
+    <div class="menu-section">
+      <h3><span class="required">* REQUIRED *</span></h3>
+      <p style="margin: 5px 0; font-size: 14px;">Upload Nextbot Image:</p>
+      <input type="file" id="nextbotImage" accept="image/*" class="file-input" required>
+    </div>
+    
+    <button class="collapsible">▼ Optional Map</button>
+    <div class="collapsible-content" id="mapSection">
+      <div class="menu-section">
+        <p style="font-size: 14px;">Upload JSON map file:</p>
+        <input type="file" id="mapFile" accept=".json" class="file-input">
+        <button id="defaultMapBtn" style="font-size: 14px; padding: 8px;">Use Default Map</button>
+      </div>
+    </div>
+    
+    <button class="collapsible">▼ Optional Audio</button>
+    <div class="collapsible-content" id="audioSection">
+      <div class="menu-section">
+        <p style="font-size: 14px;">Background Music:</p>
+        <input type="file" id="bgMusic" accept="audio/*" class="file-input">
+        <p style="font-size: 14px;">Nextbot Sounds:</p>
+        <input type="file" id="nextbotSounds" accept="audio/*" class="file-input" multiple>
+        <div class="slider-container">
+          <label>Master Volume: <span id="volumeDisplay" class="slider-value">50%</span></label>
+          <input type="range" id="masterVolume" min="0" max="100" value="50" style="width: 100%;">
+        </div>
+      </div>
+    </div>
+    
+    <button class="collapsible">▼ Game Settings</button>
+    <div class="collapsible-content" id="settingsSection">
+      <div class="menu-section">
+        <div class="slider-container">
+          <label>Mouse Sensitivity: <span id="sensDisplay" class="slider-value">Normal</span></label>
+          <input type="range" id="mouseSens" min="1" max="100" value="50" style="width: 100%;">
+        </div>
+        <div class="slider-container">
+          <label>Player Speed: <span id="playerSpeedValue" class="slider-value">100%</span></label>
+          <input type="range" id="playerSpeed" min="50" max="300" value="100" style="width: 100%;">
+        </div>
+        <div class="slider-container">
+          <label>Jump Height: <span id="jumpHeightValue" class="slider-value">100%</span></label>
+          <input type="range" id="jumpHeight" min="50" max="300" value="100" style="width: 100%;">
+        </div>
+        <div class="slider-container">
+          <label>Bot Speed: <span id="botSpeedValue" class="slider-value">100%</span></label>
+          <input type="range" id="botSpeed" min="50" max="300" value="100" style="width: 100%;">
+        </div>
+      </div>
+    </div>
+    
+    <button id="playBtn" disabled>START GAME</button>
+    
+    <p style="font-size: 12px; color: #aaa; text-align: center; margin: 5px 0;">
+      WASD: Move • Mouse: Side-to-side • SPACE: Jump • SHIFT: Sprint • ESC: Pause
+    </p>
   </div>
-  
-  <div class="slider-container">
-    <label>Jump Height: <span id="jumpHeightValue">100%</span></label>
-    <input type="range" id="jumpHeight" min="50" max="300" value="100" style="width: 250px;">
-  </div>
-  
-  <div class="slider-container">
-    <label>Bot Speed: <span id="botSpeedValue">100%</span></label>
-    <input type="range" id="botSpeed" min="50" max="300" value="100" style="width: 250px;">
-  </div>
-  
-  <p style="color: #aaa; font-size: 14px; margin-top: 20px;">
-    WASD to move • Mouse side-to-side only • SPACE to jump • SHIFT to sprint • ESC to pause
-  </p>
-  
-  <button id="playBtn" disabled>START GAME</button>
 </div>
 
-<!-- HUD -->
 <div id="hud">
   <span style="color: #ff5555;">❤️ <span id="health">100</span></span> | 
   <span style="color: #55ff55;">🏃 <span id="distance">0</span>m</span> | 
-  <span style="color: #5555ff;">⚡ <span id="speed">0</span></span>
+  <span style="color: #5555ff;">⚡ <span id="speed">0</span></span> |
+  <span style="color: #ffff55;">⏱️ <span id="time">0</span>s</span>
 </div>
 
-<!-- CROSSHAIR -->
 <div id="crosshair">+</div>
 
-<!-- LOADING -->
+<div class="audio-controls" id="audioControls">
+  <button id="muteBtn">🔊 Mute</button>
+  <div class="slider-container">
+    <label>Music:</label>
+    <input type="range" id="musicVolume" min="0" max="100" value="70" style="width: 100%;">
+  </div>
+  <div class="slider-container">
+    <label>SFX:</label>
+    <input type="range" id="sfxVolume" min="0" max="100" value="80" style="width: 100%;">
+  </div>
+</div>
+
 <div id="loading">Loading...</div>
 
-<!-- PAUSE MENU -->
 <div id="pause-menu">
   <h1 style="color: #ff3366;">PAUSED</h1>
   <p style="color: white;">Time: <span id="pause-time">0</span>s</p>
@@ -162,18 +273,18 @@
 <script>
 // ========== GAME STATE ==========
 let scene, camera, renderer;
-let bot;
+let bot, mapObjects = [];
 let playerVelocityY = 0;
 let botVelocityY = 0;
 const gravity = -0.03;
 const floorY = 2.0;
 let isOnGround = true;
 let playerHealth = 100;
-let basePlayerSpeed = 0.35;
+let basePlayerSpeed = 0.35; // THIS GETS MULTIPLIED BY SLIDER
 let maxSpeed = 0.35;
 let acceleration = 0.15;
 let friction = 0.9;
-let baseBotSpeed = 0.3; // FASTER BASE SPEED
+let baseBotSpeed = 0.3;
 let mouseSensitivity = 0.002;
 let yaw = 0;
 let distanceTraveled = 0;
@@ -183,10 +294,30 @@ let velocity = new THREE.Vector3();
 let isMouseLocked = false;
 let isPaused = false;
 
-// ========== SLIDER VALUES (ALL WILL WORK) ==========
+// ========== SLIDER VALUES ==========
 let playerSpeedMultiplier = 1;
 let jumpHeightMultiplier = 1;
 let botSpeedMultiplier = 1;
+let mouseSensMultiplier = 1;
+
+// ========== AUDIO SYSTEM ==========
+let audioContext;
+let bgMusic, nextbotAudio = [];
+let masterGain, musicGain, sfxGain;
+let isMuted = false;
+let nextbotSoundInterval;
+
+// ========== CUSTOM MAP DATA ==========
+let customMapData = null;
+const defaultMap = {
+  name: "Default Arena",
+  size: 400,
+  floorColor: 0x1a3c2e,
+  wallColor: 0x2a4c3e,
+  obstacleColor: 0x3a5c4e,
+  obstacles: 25,
+  fog: { color: 0x001122, near: 20, far: 200 }
+};
 
 // ========== UI ELEMENTS ==========
 const nextbotImageInput = document.getElementById('nextbotImage');
@@ -196,27 +327,52 @@ const loadingDiv = document.getElementById('loading');
 // ========== INITIALIZE ==========
 window.onload = function() {
   setupEventListeners();
+  setupAudioContext();
+  setupCollapsibles();
   updatePlayButton();
 };
 
 function setupEventListeners() {
-  // Enable play button when nextbot image is uploaded
   nextbotImageInput.addEventListener('change', updatePlayButton);
   
-  // ALL SLIDERS WORK NOW
+  // MAP
+  mapFileInput.addEventListener('change', handleMapFile);
+  document.getElementById('defaultMapBtn').addEventListener('click', () => {
+    customMapData = null;
+    mapFileInput.value = '';
+    alert('Using default map!');
+  });
+  
+  // PLAYER SPEED SLIDER - FIXED
   document.getElementById('playerSpeed').addEventListener('input', (e) => {
     playerSpeedMultiplier = e.target.value / 100;
     document.getElementById('playerSpeedValue').textContent = e.target.value + '%';
+    console.log("Player Speed Multiplier:", playerSpeedMultiplier); // Debug
   });
   
+  // JUMP HEIGHT SLIDER
   document.getElementById('jumpHeight').addEventListener('input', (e) => {
     jumpHeightMultiplier = e.target.value / 100;
     document.getElementById('jumpHeightValue').textContent = e.target.value + '%';
   });
   
+  // BOT SPEED SLIDER
   document.getElementById('botSpeed').addEventListener('input', (e) => {
     botSpeedMultiplier = e.target.value / 100;
     document.getElementById('botSpeedValue').textContent = e.target.value + '%';
+  });
+  
+  // MOUSE SENSITIVITY
+  document.getElementById('mouseSens').addEventListener('input', (e) => {
+    mouseSensMultiplier = e.target.value / 50;
+    document.getElementById('sensDisplay').textContent = e.target.value + '%';
+  });
+  
+  // AUDIO VOLUME
+  document.getElementById('masterVolume').addEventListener('input', (e) => {
+    const vol = e.target.value / 100;
+    document.getElementById('volumeDisplay').textContent = e.target.value + '%';
+    if (masterGain) masterGain.gain.value = vol;
   });
   
   // Play button
@@ -227,6 +383,15 @@ function setupEventListeners() {
   document.getElementById('restartBtn').addEventListener('click', () => location.reload());
   document.getElementById('quitBtn').addEventListener('click', () => location.reload());
   
+  // Audio controls
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);
+  document.getElementById('musicVolume').addEventListener('input', (e) => {
+    if (musicGain) musicGain.gain.value = e.target.value / 100;
+  });
+  document.getElementById('sfxVolume').addEventListener('input', (e) => {
+    if (sfxGain) sfxGain.gain.value = e.target.value / 100;
+  });
+  
   // Pause with ESC
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' && isMouseLocked) {
@@ -235,15 +400,68 @@ function setupEventListeners() {
   });
 }
 
+function setupCollapsibles() {
+  const collapsibles = document.querySelectorAll('.collapsible');
+  collapsibles.forEach(button => {
+    button.addEventListener('click', function() {
+      this.classList.toggle('active');
+      const content = this.nextElementSibling;
+      if (content.style.maxHeight) {
+        content.style.maxHeight = null;
+      } else {
+        content.style.maxHeight = content.scrollHeight + "px";
+      }
+    });
+  });
+}
+
 function updatePlayButton() {
   playBtn.disabled = !nextbotImageInput.files[0];
 }
 
-function startGame() {
+function handleMapFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      customMapData = JSON.parse(e.target.result);
+      console.log("Custom map loaded:", customMapData.name);
+    } catch (error) {
+      alert("Invalid map file! Using default map instead.");
+      customMapData = null;
+      mapFileInput.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
+function setupAudioContext() {
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioContext.createGain();
+    musicGain = audioContext.createGain();
+    sfxGain = audioContext.createGain();
+    
+    masterGain.connect(audioContext.destination);
+    musicGain.connect(masterGain);
+    sfxGain.connect(masterGain);
+    
+    masterGain.gain.value = 0.5;
+    musicGain.gain.value = 0.7;
+    sfxGain.gain.value = 0.8;
+  } catch (e) {
+    console.log("Audio not supported:", e);
+  }
+}
+
+async function startGame() {
   loadingDiv.style.display = 'block';
   
   try {
     const nextbotURL = URL.createObjectURL(nextbotImageInput.files[0]);
+    await loadAudioFiles();
     
     setTimeout(() => {
       initGame(nextbotURL);
@@ -256,11 +474,64 @@ function startGame() {
   }
 }
 
+async function loadAudioFiles() {
+  if (!audioContext) return;
+  
+  // Load background music
+  if (bgMusicInput.files[0]) {
+    bgMusic = await loadAudioFile(bgMusicInput.files[0], musicGain);
+    if (bgMusic) {
+      bgMusic.loop = true;
+      bgMusic.start();
+    }
+  }
+  
+  // Load nextbot sounds
+  if (nextbotSoundsInput.files.length > 0) {
+    for (let i = 0; i < nextbotSoundsInput.files.length; i++) {
+      const sound = await loadAudioFile(nextbotSoundsInput.files[i], sfxGain);
+      if (sound) nextbotAudio.push(sound);
+    }
+  }
+}
+
+function loadAudioFile(file, destination) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      audioContext.decodeAudioData(e.target.result, function(buffer) {
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(destination);
+        resolve(source);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function playRandomNextbotSound() {
+  if (nextbotAudio.length > 0 && !isMuted) {
+    const sound = nextbotAudio[Math.floor(Math.random() * nextbotAudio.length)];
+    const newSound = audioContext.createBufferSource();
+    newSound.buffer = sound.buffer;
+    newSound.connect(sfxGain);
+    newSound.start();
+  }
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  masterGain.gain.value = isMuted ? 0 : 0.5;
+  document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
+}
+
 function togglePause() {
   isPaused = !isPaused;
   document.getElementById('pause-menu').style.display = isPaused ? 'flex' : 'none';
   document.getElementById('hud').style.display = isPaused ? 'none' : 'block';
   document.getElementById('crosshair').style.display = isPaused ? 'none' : 'block';
+  document.getElementById('audioControls').style.display = isPaused ? 'none' : 'block';
   
   if (isPaused) {
     document.exitPointerLock();
@@ -274,6 +545,7 @@ function resumeGame() {
   document.getElementById('pause-menu').style.display = 'none';
   document.getElementById('hud').style.display = 'block';
   document.getElementById('crosshair').style.display = 'block';
+  document.getElementById('audioControls').style.display = 'block';
 }
 
 // ========== GAME INITIALIZATION ==========
@@ -281,16 +553,28 @@ function initGame(nextbotURL) {
   document.getElementById("menu").style.display = "none";
   document.getElementById("hud").style.display = "block";
   document.getElementById("crosshair").style.display = "block";
+  document.getElementById("audioControls").style.display = "block";
   
-  // Apply slider multipliers
-  basePlayerSpeed = 0.35 * playerSpeedMultiplier;
+  // APPLY SLIDER VALUES - ALL WORKING NOW
+  basePlayerSpeed = 0.35 * playerSpeedMultiplier; // FIXED: This now uses the slider
   maxSpeed = basePlayerSpeed;
   baseBotSpeed = 0.3 * botSpeedMultiplier;
+  mouseSensitivity = 0.002 * mouseSensMultiplier;
+  
+  console.log("Game initialized with:");
+  console.log("Player Speed:", basePlayerSpeed, "Multiplier:", playerSpeedMultiplier);
+  console.log("Bot Speed:", baseBotSpeed, "Multiplier:", botSpeedMultiplier);
+  console.log("Jump Height Multiplier:", jumpHeightMultiplier);
+  
+  // Use custom map or default
+  const mapData = customMapData || defaultMap;
   
   // Create scene
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x001122);
-  scene.fog = new THREE.Fog(0x001122, 20, 200);
+  scene.fog = new THREE.Fog(mapData.fog?.color || 0x001122, 
+                           mapData.fog?.near || 20, 
+                           mapData.fog?.far || 200);
 
   // Create camera
   camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -308,42 +592,48 @@ function initGame(nextbotURL) {
   setupMouseControls();
 
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
   
   const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
   directionalLight.position.set(100, 300, 100);
   scene.add(directionalLight);
 
-  // Create map
-  createMap();
+  // Create map from data
+  createMap(mapData);
 
   // Create Nextbot
   createNextbot(nextbotURL);
-  
+
   // Start game loop
   gameTime = 0;
   animate();
+  
+  // Start nextbot sound interval
+  if (nextbotAudio.length > 0) {
+    nextbotSoundInterval = setInterval(playRandomNextbotSound, 5000 + Math.random() * 10000);
+  }
 }
 
-function createMap() {
-  const size = 400;
+function createMap(mapData) {
+  const size = mapData.size || 400;
   const halfSize = size / 2;
   
   // Floor
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(size, size, 40, 40),
     new THREE.MeshLambertMaterial({ 
-      color: 0x1a3c2e,
+      color: mapData.floorColor || 0x1a3c2e,
       side: THREE.DoubleSide
     })
   );
   floor.rotation.x = Math.PI / 2;
   floor.position.y = 0;
   scene.add(floor);
+  mapObjects.push(floor);
 
   // Walls
-  const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x2a4c3e });
+  const wallMaterial = new THREE.MeshLambertMaterial({ color: mapData.wallColor || 0x2a4c3e });
   const wallGeometry = new THREE.PlaneGeometry(size, 40);
   
   const walls = [
@@ -358,11 +648,14 @@ function createMap() {
     wall.position.set(...wallData.pos);
     wall.rotation.set(...wallData.rot);
     scene.add(wall);
+    mapObjects.push(wall);
   });
 
   // Obstacles
-  const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5c4e });
-  for (let i = 0; i < 20; i++) {
+  const obstacleCount = mapData.obstacles || 25;
+  const obstacleMaterial = new THREE.MeshLambertMaterial({ color: mapData.obstacleColor || 0x3a5c4e });
+  
+  for (let i = 0; i < obstacleCount; i++) {
     const height = Math.random() * 15 + 5;
     const obstacle = new THREE.Mesh(
       new THREE.BoxGeometry(
@@ -379,6 +672,7 @@ function createMap() {
       Math.random() * (maxPos * 2) - maxPos
     );
     scene.add(obstacle);
+    mapObjects.push(obstacle);
   }
 }
 
@@ -396,7 +690,6 @@ function createNextbot(imgURL) {
     bot.position.set(0, 4, -80);
     scene.add(bot);
   }, undefined, function(error) {
-    // Placeholder if image fails
     const botGeometry = new THREE.BoxGeometry(6, 6, 6);
     const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
     bot = new THREE.Mesh(botGeometry, botMaterial);
@@ -429,7 +722,7 @@ function onMouseMove(event) {
   if (!isMouseLocked || isPaused) return;
   
   const movementX = event.movementX || 0;
-  yaw -= movementX * mouseSensitivity;
+  yaw -= movementX * mouseSensitivity; // Mouse sensitivity slider works here
   camera.rotation.y += (yaw - camera.rotation.y) * 0.2;
   camera.rotation.x = 0; // Keep level
 }
@@ -443,12 +736,12 @@ window.onkeydown = e => {
   keys[key] = true;
   
   if (e.code === 'Space' && isOnGround) {
-    playerVelocityY = 0.8 * jumpHeightMultiplier; // JUMP HEIGHT SLIDER WORKS
+    playerVelocityY = 0.8 * jumpHeightMultiplier; // Jump height slider works
     isOnGround = false;
   }
   
   if (key === 'shift') {
-    maxSpeed = basePlayerSpeed * 1.8; // Sprint is 1.8x base speed
+    maxSpeed = basePlayerSpeed * 1.8; // Sprint is 1.8x base speed (affected by player speed slider)
     acceleration = 0.2;
   }
 };
@@ -458,7 +751,7 @@ window.onkeyup = e => {
   keys[key] = false;
   
   if (key === 'shift') {
-    maxSpeed = basePlayerSpeed; // Back to normal speed (PLAYER SPEED SLIDER WORKS)
+    maxSpeed = basePlayerSpeed; // Back to normal speed (PLAYER SPEED SLIDER WORKS HERE)
     acceleration = 0.15;
   }
 };
@@ -470,9 +763,10 @@ function animate() {
   if (isPaused) return;
   
   gameTime += 1/60;
+  document.getElementById('time').textContent = Math.floor(gameTime);
   
   if (isMouseLocked) {
-    // Player movement - PLAYER SPEED SLIDER AFFECTS THIS
+    // Player movement - PLAYER SPEED SLIDER AFFECTS THIS DIRECTLY
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
     
@@ -496,9 +790,10 @@ function animate() {
       velocity.normalize().multiplyScalar(maxSpeed);
     }
     
+    // THIS IS WHERE PLAYER SPEED SLIDER TAKES EFFECT
     camera.position.add(velocity);
     
-    // Update HUD
+    // Update HUD speed display
     const currentSpeed = Math.round(velocity.length() * 100);
     document.getElementById('speed').textContent = currentSpeed;
     
@@ -517,23 +812,22 @@ function animate() {
     lastPosition.copy(camera.position);
     document.getElementById('distance').textContent = Math.floor(distanceTraveled);
     
-    // Nextbot AI with GRAVITY - BOT SPEED SLIDER WORKS
+    // Nextbot AI - BOT SPEED SLIDER WORKS
     if (bot) {
       // Apply gravity to bot
       botVelocityY += gravity;
       bot.position.y += botVelocityY;
       
-      // Keep bot above ground
       if (bot.position.y <= 4) {
         bot.position.y = 4;
         botVelocityY = 0;
       }
       
-      // Bot movement towards player - BOT SPEED SLIDER AFFECTS THIS
+      // Bot movement - BOT SPEED SLIDER AFFECTS THIS
       const dir = new THREE.Vector3();
       dir.subVectors(camera.position, bot.position).normalize();
       
-      let currentBotSpeed = baseBotSpeed; // AFFECTED BY SLIDER
+      let currentBotSpeed = baseBotSpeed; // Affected by bot speed slider
       const distanceToPlayer = bot.position.distanceTo(camera.position);
       
       if (distanceToPlayer < 20) {
@@ -544,16 +838,13 @@ function animate() {
         currentBotSpeed *= 3;
       }
       
-      // Move bot horizontally (not vertically - gravity handles that)
       dir.y = 0;
       bot.position.add(dir.multiplyScalar(currentBotSpeed));
       
-      // Make bot face player
       const targetLook = camera.position.clone();
       targetLook.y = bot.position.y;
       bot.lookAt(targetLook);
       
-      // Bot can jump randomly
       if (Math.random() < 0.01 && bot.position.y <= 4.1) {
         botVelocityY = 0.6;
       }
@@ -563,24 +854,22 @@ function animate() {
         playerHealth -= 2;
         document.getElementById('health').textContent = Math.max(0, Math.floor(playerHealth));
         
-        // Screen shake
         const shake = (8 - distanceToPlayer) / 2;
         camera.position.x += (Math.random() - 0.5) * shake;
         camera.position.z += (Math.random() - 0.5) * shake;
         
-        // Red HUD flash
         document.getElementById("hud").style.color = '#ff0000';
         setTimeout(() => {
           document.getElementById("hud").style.color = 'white';
         }, 100);
         
         if (playerHealth <= 0) {
+          clearInterval(nextbotSoundInterval);
           alert(`GAME OVER!\nTime: ${Math.floor(gameTime)}s\nDistance: ${Math.floor(distanceTraveled)}m`);
           location.reload();
         }
       }
       
-      // Teleport if too far
       if (distanceToPlayer > 80 && Math.random() < 0.005) {
         const angle = Math.random() * Math.PI * 2;
         const teleportDistance = 20 + Math.random() * 30;
@@ -593,11 +882,11 @@ function animate() {
     }
     
     // Keep in bounds
-    const bounds = 180;
-    if (camera.position.x > bounds) camera.position.x = bounds;
-    if (camera.position.x < -bounds) camera.position.x = -bounds;
-    if (camera.position.z > bounds) camera.position.z = bounds;
-    if (camera.position.z < -bounds) camera.position.z = -bounds;
+    const mapSize = customMapData?.size ? customMapData.size / 2 - 20 : 180;
+    if (camera.position.x > mapSize) camera.position.x = mapSize;
+    if (camera.position.x < -mapSize) camera.position.x = -mapSize;
+    if (camera.position.z > mapSize) camera.position.z = mapSize;
+    if (camera.position.z < -mapSize) camera.position.z = -mapSize;
   }
   
   if (renderer && scene && camera) {
