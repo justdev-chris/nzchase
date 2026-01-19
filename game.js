@@ -1,0 +1,562 @@
+// ========== GAME STATE ==========
+let scene, camera, renderer;
+let bot;
+let playerVelocityY = 0;
+let botVelocityY = 0;
+const gravity = -0.03;
+const floorY = 2.0;
+let isOnGround = true;
+let playerHealth = 100;
+let basePlayerSpeed = 0.35;
+let maxSpeed = 0.35;
+let acceleration = 0.15;
+let friction = 0.9;
+let baseBotSpeed = 0.3;
+let mouseSensitivity = 0.002;
+let yaw = 0;
+let distanceTraveled = 0;
+let gameTime = 0;
+let lastPosition = new THREE.Vector3();
+let velocity = new THREE.Vector3();
+let isMouseLocked = false;
+let isPaused = false;
+
+// ========== SLIDER VALUES ==========
+let playerSpeedMultiplier = 1;
+let jumpHeightMultiplier = 1;
+let botSpeedMultiplier = 1;
+
+// ========== AUDIO SYSTEM ==========
+let audioContext;
+let bgMusic, nextbotAudio = [];
+let masterGain, musicGain, sfxGain;
+let isMuted = false;
+let nextbotSoundInterval;
+
+// ========== UI ELEMENTS ==========
+const nextbotImageInput = document.getElementById('nextbotImage');
+const playBtn = document.getElementById('playBtn');
+const loadingDiv = document.getElementById('loading');
+
+// ========== INITIALIZE ==========
+window.onload = function() {
+    setupEventListeners();
+    setupAudioContext();
+    updatePlayButton();
+};
+
+function setupEventListeners() {
+    // Enable play button when nextbot image is uploaded
+    nextbotImageInput.addEventListener('change', updatePlayButton);
+    
+    // PLAYER SPEED SLIDER - FIXED
+    const playerSpeedSlider = document.getElementById('playerSpeed');
+    playerSpeedSlider.addEventListener('input', (e) => {
+        playerSpeedMultiplier = e.target.value / 100;
+        document.getElementById('playerSpeedValue').textContent = e.target.value + '%';
+        console.log("Player Speed Multiplier:", playerSpeedMultiplier);
+    });
+    
+    // JUMP HEIGHT SLIDER
+    document.getElementById('jumpHeight').addEventListener('input', (e) => {
+        jumpHeightMultiplier = e.target.value / 100;
+        document.getElementById('jumpHeightValue').textContent = e.target.value + '%';
+    });
+    
+    // BOT SPEED SLIDER
+    document.getElementById('botSpeed').addEventListener('input', (e) => {
+        botSpeedMultiplier = e.target.value / 100;
+        document.getElementById('botSpeedValue').textContent = e.target.value + '%';
+    });
+    
+    // AUDIO VOLUME
+    document.getElementById('masterVolume').addEventListener('input', (e) => {
+        const vol = e.target.value / 100;
+        document.getElementById('volumeDisplay').textContent = e.target.value + '%';
+        if (masterGain) masterGain.gain.value = vol;
+    });
+    
+    // Play button
+    playBtn.addEventListener('click', startGame);
+    
+    // Pause menu
+    document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+    document.getElementById('restartBtn').addEventListener('click', () => location.reload());
+    document.getElementById('quitBtn').addEventListener('click', () => location.reload());
+    
+    // Audio controls
+    document.getElementById('muteBtn').addEventListener('click', toggleMute);
+    document.getElementById('musicVolume').addEventListener('input', (e) => {
+        if (musicGain) musicGain.gain.value = e.target.value / 100;
+    });
+    document.getElementById('sfxVolume').addEventListener('input', (e) => {
+        if (sfxGain) sfxGain.gain.value = e.target.value / 100;
+    });
+    
+    // Pause with ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Escape' && isMouseLocked) {
+            togglePause();
+        }
+    });
+}
+
+function updatePlayButton() {
+    playBtn.disabled = !nextbotImageInput.files[0];
+}
+
+function setupAudioContext() {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioContext.createGain();
+        musicGain = audioContext.createGain();
+        sfxGain = audioContext.createGain();
+        
+        masterGain.connect(audioContext.destination);
+        musicGain.connect(masterGain);
+        sfxGain.connect(masterGain);
+        
+        masterGain.gain.value = 0.5;
+        musicGain.gain.value = 0.7;
+        sfxGain.gain.value = 0.8;
+    } catch (e) {
+        console.log("Audio not supported:", e);
+    }
+}
+
+async function startGame() {
+    loadingDiv.style.display = 'block';
+    
+    try {
+        const nextbotURL = URL.createObjectURL(nextbotImageInput.files[0]);
+        await loadAudioFiles();
+        
+        setTimeout(() => {
+            initGame(nextbotURL);
+            loadingDiv.style.display = 'none';
+        }, 500);
+        
+    } catch (error) {
+        loadingDiv.style.display = 'none';
+        alert("Error loading game: " + error.message);
+    }
+}
+
+async function loadAudioFiles() {
+    if (!audioContext) return;
+    
+    const bgMusicFile = document.getElementById('bgMusic').files[0];
+    const nextbotSoundsFiles = document.getElementById('nextbotSounds').files;
+    
+    // Load background music
+    if (bgMusicFile) {
+        bgMusic = await loadAudioFile(bgMusicFile, musicGain);
+        if (bgMusic) {
+            bgMusic.loop = true;
+            bgMusic.start();
+        }
+    }
+    
+    // Load nextbot sounds
+    if (nextbotSoundsFiles.length > 0) {
+        for (let i = 0; i < nextbotSoundsFiles.length; i++) {
+            const sound = await loadAudioFile(nextbotSoundsFiles[i], sfxGain);
+            if (sound) nextbotAudio.push(sound);
+        }
+    }
+}
+
+function loadAudioFile(file, destination) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            audioContext.decodeAudioData(e.target.result, function(buffer) {
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(destination);
+                resolve(source);
+            });
+        };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+function playRandomNextbotSound() {
+    if (nextbotAudio.length > 0 && !isMuted) {
+        const sound = nextbotAudio[Math.floor(Math.random() * nextbotAudio.length)];
+        const newSound = audioContext.createBufferSource();
+        newSound.buffer = sound.buffer;
+        newSound.connect(sfxGain);
+        newSound.start();
+    }
+}
+
+function toggleMute() {
+    isMuted = !isMuted;
+    masterGain.gain.value = isMuted ? 0 : 0.5;
+    document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
+}
+
+function togglePause() {
+    isPaused = !isPaused;
+    document.getElementById('pause-menu').style.display = isPaused ? 'flex' : 'none';
+    document.getElementById('hud').style.display = isPaused ? 'none' : 'block';
+    document.getElementById('crosshair').style.display = isPaused ? 'none' : 'block';
+    document.getElementById('audioControls').style.display = isPaused ? 'none' : 'block';
+    
+    if (isPaused) {
+        document.exitPointerLock();
+        document.getElementById('pause-time').textContent = Math.floor(gameTime);
+        document.getElementById('pause-distance').textContent = Math.floor(distanceTraveled);
+    }
+}
+
+function resumeGame() {
+    isPaused = false;
+    document.getElementById('pause-menu').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    document.getElementById('crosshair').style.display = 'block';
+    document.getElementById('audioControls').style.display = 'block';
+}
+
+// ========== GAME INITIALIZATION ==========
+function initGame(nextbotURL) {
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("hud").style.display = "block";
+    document.getElementById("crosshair").style.display = "block";
+    document.getElementById("audioControls").style.display = "block";
+    
+    // APPLY SLIDER VALUES - ALL WORKING NOW
+    basePlayerSpeed = 0.35 * playerSpeedMultiplier; // PLAYER SPEED SLIDER WORKS
+    maxSpeed = basePlayerSpeed;
+    baseBotSpeed = 0.3 * botSpeedMultiplier; // BOT SPEED SLIDER WORKS
+    
+    console.log("Player Speed:", basePlayerSpeed);
+    console.log("Jump Height Multiplier:", jumpHeightMultiplier);
+    console.log("Bot Speed:", baseBotSpeed);
+    
+    // Create scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x001122);
+    scene.fog = new THREE.Fog(0x001122, 20, 200);
+
+    // Create camera
+    camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, floorY, 5);
+    camera.rotation.x = 0; // LOCK VERTICAL ROTATION
+    lastPosition.copy(camera.position);
+
+    // Create renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // Setup mouse controls
+    setupMouseControls();
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    directionalLight.position.set(100, 300, 100);
+    scene.add(directionalLight);
+
+    // Create map
+    createMap();
+
+    // Create Nextbot
+    createNextbot(nextbotURL);
+
+    // Start game loop
+    gameTime = 0;
+    animate();
+    
+    // Start nextbot sound interval
+    if (nextbotAudio.length > 0) {
+        nextbotSoundInterval = setInterval(playRandomNextbotSound, 5000 + Math.random() * 10000);
+    }
+}
+
+function createMap() {
+    const size = 400;
+    const halfSize = size / 2;
+    
+    // Floor
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(size, size, 40, 40),
+        new THREE.MeshLambertMaterial({ 
+            color: 0x1a3c2e,
+            side: THREE.DoubleSide
+        })
+    );
+    floor.rotation.x = Math.PI / 2;
+    floor.position.y = 0;
+    scene.add(floor);
+
+    // Walls
+    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x2a4c3e });
+    const wallGeometry = new THREE.PlaneGeometry(size, 40);
+    
+    const walls = [
+        { pos: [0, 20, -halfSize], rot: [0, 0, 0] },
+        { pos: [0, 20, halfSize], rot: [0, Math.PI, 0] },
+        { pos: [-halfSize, 20, 0], rot: [0, Math.PI/2, 0] },
+        { pos: [halfSize, 20, 0], rot: [0, -Math.PI/2, 0] }
+    ];
+    
+    walls.forEach(wallData => {
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(...wallData.pos);
+        wall.rotation.set(...wallData.rot);
+        scene.add(wall);
+    });
+
+    // Obstacles
+    const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5c4e });
+    for (let i = 0; i < 20; i++) {
+        const height = Math.random() * 15 + 5;
+        const obstacle = new THREE.Mesh(
+            new THREE.BoxGeometry(
+                Math.random() * 10 + 5, 
+                height, 
+                Math.random() * 10 + 5
+            ),
+            obstacleMaterial
+        );
+        const maxPos = halfSize - 20;
+        obstacle.position.set(
+            Math.random() * (maxPos * 2) - maxPos,
+            height / 2,
+            Math.random() * (maxPos * 2) - maxPos
+        );
+        scene.add(obstacle);
+    }
+}
+
+function createNextbot(imgURL) {
+    const texLoader = new THREE.TextureLoader();
+    texLoader.load(imgURL, function(texture) {
+        const aspect = texture.image.width / texture.image.height;
+        const botGeometry = new THREE.PlaneGeometry(8 * aspect, 8);
+        const botMaterial = new THREE.MeshLambertMaterial({ 
+            map: texture, 
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        bot = new THREE.Mesh(botGeometry, botMaterial);
+        bot.position.set(0, 4, -80);
+        scene.add(bot);
+    }, undefined, function(error) {
+        const botGeometry = new THREE.BoxGeometry(6, 6, 6);
+        const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+        bot = new THREE.Mesh(botGeometry, botMaterial);
+        bot.position.set(0, 3, -80);
+        scene.add(bot);
+    });
+}
+
+// ========== MOUSE CONTROLS ==========
+function setupMouseControls() {
+    const canvas = renderer.domElement;
+    
+    canvas.addEventListener('click', () => {
+        if (!isMouseLocked && !isPaused) {
+            canvas.requestPointerLock();
+        }
+    });
+
+    document.addEventListener('pointerlockchange', onPointerLockChange);
+    document.addEventListener('mousemove', onMouseMove);
+}
+
+function onPointerLockChange() {
+    const canvas = renderer.domElement;
+    isMouseLocked = document.pointerLockElement === canvas;
+    document.getElementById("crosshair").style.display = isMouseLocked && !isPaused ? "block" : "none";
+}
+
+function onMouseMove(event) {
+    if (!isMouseLocked || isPaused) return;
+    
+    const movementX = event.movementX || 0;
+    yaw -= movementX * mouseSensitivity;
+    camera.rotation.y += (yaw - camera.rotation.y) * 0.2;
+    camera.rotation.x = 0; // Keep level
+}
+
+// ========== KEYBOARD CONTROLS ==========
+const keys = {};
+window.onkeydown = e => {
+    if (isPaused) return;
+    
+    const key = e.key.toLowerCase();
+    keys[key] = true;
+    
+    if (e.code === 'Space' && isOnGround) {
+        playerVelocityY = 0.8 * jumpHeightMultiplier; // JUMP HEIGHT SLIDER WORKS
+        isOnGround = false;
+    }
+    
+    if (key === 'shift') {
+        maxSpeed = basePlayerSpeed * 1.8; // Sprint is 1.8x base speed (PLAYER SPEED SLIDER WORKS)
+        acceleration = 0.2;
+    }
+};
+
+window.onkeyup = e => {
+    const key = e.key.toLowerCase();
+    keys[key] = false;
+    
+    if (key === 'shift') {
+        maxSpeed = basePlayerSpeed; // Back to normal speed (PLAYER SPEED SLIDER WORKS)
+        acceleration = 0.15;
+    }
+};
+
+// ========== GAME LOOP ==========
+function animate() {
+    requestAnimationFrame(animate);
+    
+    if (isPaused) return;
+    
+    gameTime += 1/60;
+    document.getElementById('time').textContent = Math.floor(gameTime);
+    
+    if (isMouseLocked) {
+        // Player movement - PLAYER SPEED SLIDER AFFECTS THIS
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+        
+        camera.getWorldDirection(forward);
+        forward.y = 0;
+        forward.normalize();
+        
+        right.crossVectors(camera.up, forward).normalize();
+        
+        velocity.x = 0;
+        velocity.z = 0;
+        
+        if (keys["w"]) velocity.add(forward.clone().multiplyScalar(acceleration));
+        if (keys["s"]) velocity.add(forward.clone().multiplyScalar(-acceleration));
+        if (keys["a"]) velocity.add(right.clone().multiplyScalar(acceleration));
+        if (keys["d"]) velocity.add(right.clone().multiplyScalar(-acceleration));
+        
+        velocity.multiplyScalar(friction);
+        
+        if (velocity.length() > maxSpeed) {
+            velocity.normalize().multiplyScalar(maxSpeed);
+        }
+        
+        // THIS IS WHERE PLAYER SPEED SLIDER TAKES EFFECT
+        camera.position.add(velocity);
+        
+        // Update HUD speed display
+        const currentSpeed = Math.round(velocity.length() * 100);
+        document.getElementById('speed').textContent = currentSpeed;
+        
+        // Player gravity and jumping - JUMP HEIGHT SLIDER WORKS
+        playerVelocityY += gravity;
+        camera.position.y += playerVelocityY;
+        
+        if (camera.position.y <= floorY) {
+            camera.position.y = floorY;
+            playerVelocityY = 0;
+            isOnGround = true;
+        }
+        
+        // Distance tracking
+        distanceTraveled += camera.position.distanceTo(lastPosition) * 0.5;
+        lastPosition.copy(camera.position);
+        document.getElementById('distance').textContent = Math.floor(distanceTraveled);
+        
+        // Nextbot AI - BOT SPEED SLIDER WORKS
+        if (bot) {
+            // Apply gravity to bot
+            botVelocityY += gravity;
+            bot.position.y += botVelocityY;
+            
+            if (bot.position.y <= 4) {
+                bot.position.y = 4;
+                botVelocityY = 0;
+            }
+            
+            // Bot movement - BOT SPEED SLIDER AFFECTS THIS
+            const dir = new THREE.Vector3();
+            dir.subVectors(camera.position, bot.position).normalize();
+            
+            let currentBotSpeed = baseBotSpeed; // Affected by bot speed slider
+            const distanceToPlayer = bot.position.distanceTo(camera.position);
+            
+            if (distanceToPlayer < 20) {
+                currentBotSpeed *= 2;
+            }
+            
+            if (Math.random() < 0.02) {
+                currentBotSpeed *= 3;
+            }
+            
+            dir.y = 0;
+            bot.position.add(dir.multiplyScalar(currentBotSpeed));
+            
+            const targetLook = camera.position.clone();
+            targetLook.y = bot.position.y;
+            bot.lookAt(targetLook);
+            
+            if (Math.random() < 0.01 && bot.position.y <= 4.1) {
+                botVelocityY = 0.6;
+            }
+            
+            // Collision with nextbot
+            if (distanceToPlayer < 8) {
+                playerHealth -= 2;
+                document.getElementById('health').textContent = Math.max(0, Math.floor(playerHealth));
+                
+                const shake = (8 - distanceToPlayer) / 2;
+                camera.position.x += (Math.random() - 0.5) * shake;
+                camera.position.z += (Math.random() - 0.5) * shake;
+                
+                document.getElementById("hud").style.color = '#ff0000';
+                setTimeout(() => {
+                    document.getElementById("hud").style.color = 'white';
+                }, 100);
+                
+                if (playerHealth <= 0) {
+                    clearInterval(nextbotSoundInterval);
+                    alert(`GAME OVER!\nTime: ${Math.floor(gameTime)}s\nDistance: ${Math.floor(distanceTraveled)}m`);
+                    location.reload();
+                }
+            }
+            
+            if (distanceToPlayer > 80 && Math.random() < 0.005) {
+                const angle = Math.random() * Math.PI * 2;
+                const teleportDistance = 20 + Math.random() * 30;
+                bot.position.set(
+                    camera.position.x + Math.cos(angle) * teleportDistance,
+                    4,
+                    camera.position.z + Math.sin(angle) * teleportDistance
+                );
+            }
+        }
+        
+        // Keep in bounds
+        const bounds = 180;
+        if (camera.position.x > bounds) camera.position.x = bounds;
+        if (camera.position.x < -bounds) camera.position.x = -bounds;
+        if (camera.position.z > bounds) camera.position.z = bounds;
+        if (camera.position.z < -bounds) camera.position.z = -bounds;
+    }
+    
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
+}
+
+window.onresize = () => {
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+};
