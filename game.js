@@ -42,118 +42,90 @@ let savedNextbotImage = null;
 let savedBgMusic = null;
 let savedNextbotSounds = [];
 
-// ========== UI ELEMENT GETTERS (SAFE) ==========
+// ========== UI ELEMENT GETTERS ==========
 function getElement(id) {
-    const element = document.getElementById(id);
-    if (!element) {
-        console.warn(`Element with id "${id}" not found`);
-    }
-    return element;
+    return document.getElementById(id);
 }
 
 // ========== INITIALIZE ==========
 document.addEventListener('DOMContentLoaded', function() {
-    // Wait for DOM to be fully loaded
-    setTimeout(() => {
-        if (typeof THREE === 'undefined') {
-            console.error("Three.js failed to load!");
-            alert("Three.js library failed to load. Please refresh the page or check your internet connection.");
-            return;
-        }
-        
-        loadSavedSettings();
-        setupEventListeners();
-        setupAudioContext();
-        updatePlayButton();
-    }, 100);
+    if (typeof THREE === 'undefined') {
+        alert("Three.js failed to load! Please refresh the page.");
+        return;
+    }
+    
+    loadSavedSettings();
+    setupEventListeners();
+    setupAudioContext();
+    updatePlayButton();
 });
 
 function loadSavedSettings() {
-    // Load saved settings from localStorage
     const savedSettings = localStorage.getItem('nzchase_settings');
     if (savedSettings) {
         try {
             const settings = JSON.parse(savedSettings);
             
-            // Load slider values (with null checks)
-            const playerSpeedSlider = getElement('playerSpeed');
-            const jumpHeightSlider = getElement('jumpHeight');
-            const botSpeedSlider = getElement('botSpeed');
-            const masterVolumeSlider = getElement('masterVolume');
-            
-            if (settings.playerSpeed !== undefined && playerSpeedSlider) {
-                playerSpeedSlider.value = settings.playerSpeed;
+            // Load slider values
+            if (settings.playerSpeed !== undefined) {
+                getElement('playerSpeed').value = settings.playerSpeed;
                 playerSpeedMultiplier = settings.playerSpeed / 100;
-                const playerSpeedValue = getElement('playerSpeedValue');
-                if (playerSpeedValue) playerSpeedValue.textContent = settings.playerSpeed + '%';
+                getElement('playerSpeedValue').textContent = settings.playerSpeed + '%';
             }
             
-            if (settings.jumpHeight !== undefined && jumpHeightSlider) {
-                jumpHeightSlider.value = settings.jumpHeight;
+            if (settings.jumpHeight !== undefined) {
+                getElement('jumpHeight').value = settings.jumpHeight;
                 jumpHeightMultiplier = settings.jumpHeight / 100;
-                const jumpHeightValue = getElement('jumpHeightValue');
-                if (jumpHeightValue) jumpHeightValue.textContent = settings.jumpHeight + '%';
+                getElement('jumpHeightValue').textContent = settings.jumpHeight + '%';
             }
             
-            if (settings.botSpeed !== undefined && botSpeedSlider) {
-                botSpeedSlider.value = settings.botSpeed;
+            if (settings.botSpeed !== undefined) {
+                getElement('botSpeed').value = settings.botSpeed;
                 botSpeedMultiplier = settings.botSpeed / 100;
-                const botSpeedValue = getElement('botSpeedValue');
-                if (botSpeedValue) botSpeedValue.textContent = settings.botSpeed + '%';
+                getElement('botSpeedValue').textContent = settings.botSpeed + '%';
             }
             
-            if (settings.masterVolume !== undefined && masterVolumeSlider) {
-                masterVolumeSlider.value = settings.masterVolume;
-                const volumeDisplay = getElement('volumeDisplay');
-                if (volumeDisplay) volumeDisplay.textContent = settings.masterVolume + '%';
+            if (settings.masterVolume !== undefined) {
+                getElement('masterVolume').value = settings.masterVolume;
+                getElement('volumeDisplay').textContent = settings.masterVolume + '%';
             }
             
-            // Load audio file names for display
+            // Load file names for display
             if (settings.nextbotImageName) {
-                const lastNextbotName = getElement('lastNextbotName');
-                const lastNextbotPreview = getElement('lastNextbotPreview');
-                if (lastNextbotName) lastNextbotName.textContent = settings.nextbotImageName;
-                if (lastNextbotPreview) lastNextbotPreview.style.display = 'block';
+                getElement('lastNextbotName').textContent = settings.nextbotImageName;
+                getElement('lastNextbotPreview').style.display = 'block';
             }
             
             if (settings.bgMusicName) {
-                const lastBgMusicName = getElement('lastBgMusicName');
-                const lastBgMusicPreview = getElement('lastBgMusicPreview');
-                if (lastBgMusicName) lastBgMusicName.textContent = settings.bgMusicName;
-                if (lastBgMusicPreview) lastBgMusicPreview.style.display = 'block';
+                getElement('lastBgMusicName').textContent = settings.bgMusicName;
+                getElement('lastBgMusicPreview').style.display = 'block';
             }
             
             if (settings.nextbotSoundsCount) {
-                const lastSoundsCount = getElement('lastSoundsCount');
-                const lastSoundsPreview = getElement('lastSoundsPreview');
-                if (lastSoundsCount) lastSoundsCount.textContent = settings.nextbotSoundsCount;
-                if (lastSoundsPreview) lastSoundsPreview.style.display = 'block';
+                getElement('lastSoundsCount').textContent = settings.nextbotSoundsCount;
+                getElement('lastSoundsPreview').style.display = 'block';
             }
             
-            console.log("Loaded saved settings");
-            
         } catch (e) {
-            console.error("Failed to load saved settings:", e);
+            console.error("Failed to load settings:", e);
         }
     }
 }
 
 function saveSettings() {
-    const rememberCheckbox = getElement('rememberSettings');
-    if (!rememberCheckbox || !rememberCheckbox.checked) return;
+    if (!getElement('rememberSettings').checked) return;
     
     const settings = {
-        playerSpeed: getElement('playerSpeed') ? getElement('playerSpeed').value : 100,
-        jumpHeight: getElement('jumpHeight') ? getElement('jumpHeight').value : 100,
-        botSpeed: getElement('botSpeed') ? getElement('botSpeed').value : 100,
-        masterVolume: getElement('masterVolume') ? getElement('masterVolume').value : 50,
+        playerSpeed: getElement('playerSpeed').value,
+        jumpHeight: getElement('jumpHeight').value,
+        botSpeed: getElement('botSpeed').value,
+        masterVolume: getElement('masterVolume').value,
         nextbotImageName: savedNextbotImage ? savedNextbotImage.name : null,
         bgMusicName: savedBgMusic ? savedBgMusic.name : null,
         nextbotSoundsCount: savedNextbotSounds.length
     };
     
     localStorage.setItem('nzchase_settings', JSON.stringify(settings));
-    console.log("Settings saved");
 }
 
 function clearSavedSettings() {
@@ -163,163 +135,99 @@ function clearSavedSettings() {
     savedNextbotSounds = [];
     
     // Reset UI
-    const lastNextbotPreview = getElement('lastNextbotPreview');
-    const lastBgMusicPreview = getElement('lastBgMusicPreview');
-    const lastSoundsPreview = getElement('lastSoundsPreview');
-    
-    if (lastNextbotPreview) lastNextbotPreview.style.display = 'none';
-    if (lastBgMusicPreview) lastBgMusicPreview.style.display = 'none';
-    if (lastSoundsPreview) lastSoundsPreview.style.display = 'none';
+    getElement('lastNextbotPreview').style.display = 'none';
+    getElement('lastBgMusicPreview').style.display = 'none';
+    getElement('lastSoundsPreview').style.display = 'none';
     
     // Reset sliders to defaults
-    const playerSpeedSlider = getElement('playerSpeed');
-    const jumpHeightSlider = getElement('jumpHeight');
-    const botSpeedSlider = getElement('botSpeed');
-    const masterVolumeSlider = getElement('masterVolume');
-    
-    if (playerSpeedSlider) playerSpeedSlider.value = 100;
-    if (jumpHeightSlider) jumpHeightSlider.value = 100;
-    if (botSpeedSlider) botSpeedSlider.value = 100;
-    if (masterVolumeSlider) masterVolumeSlider.value = 50;
+    getElement('playerSpeed').value = 100;
+    getElement('jumpHeight').value = 100;
+    getElement('botSpeed').value = 100;
+    getElement('masterVolume').value = 50;
     
     playerSpeedMultiplier = 1;
     jumpHeightMultiplier = 1;
     botSpeedMultiplier = 1;
     
-    const playerSpeedValue = getElement('playerSpeedValue');
-    const jumpHeightValue = getElement('jumpHeightValue');
-    const botSpeedValue = getElement('botSpeedValue');
-    const volumeDisplay = getElement('volumeDisplay');
+    getElement('playerSpeedValue').textContent = '100%';
+    getElement('jumpHeightValue').textContent = '100%';
+    getElement('botSpeedValue').textContent = '100%';
+    getElement('volumeDisplay').textContent = '50%';
     
-    if (playerSpeedValue) playerSpeedValue.textContent = '100%';
-    if (jumpHeightValue) jumpHeightValue.textContent = '100%';
-    if (botSpeedValue) botSpeedValue.textContent = '100%';
-    if (volumeDisplay) volumeDisplay.textContent = '50%';
-    
-    alert("All saved settings cleared!");
+    alert("Settings cleared!");
 }
 
 function setupEventListeners() {
-    // Enable play button when nextbot image is uploaded
-    const nextbotImageInput = getElement('nextbotImage');
-    if (nextbotImageInput) {
-        nextbotImageInput.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                savedNextbotImage = e.target.files[0];
-            }
-            updatePlayButton();
-        });
-    }
+    // Nextbot image upload
+    getElement('nextbotImage').addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            savedNextbotImage = e.target.files[0];
+        }
+        updatePlayButton();
+    });
     
-    const bgMusicInput = getElement('bgMusic');
-    if (bgMusicInput) {
-        bgMusicInput.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                savedBgMusic = e.target.files[0];
-            }
-        });
-    }
+    // Background music
+    getElement('bgMusic').addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            savedBgMusic = e.target.files[0];
+        }
+    });
     
-    const nextbotSoundsInput = getElement('nextbotSounds');
-    if (nextbotSoundsInput) {
-        nextbotSoundsInput.addEventListener('change', (e) => {
-            savedNextbotSounds = Array.from(e.target.files);
-        });
-    }
+    // Nextbot sounds
+    getElement('nextbotSounds').addEventListener('change', (e) => {
+        savedNextbotSounds = Array.from(e.target.files);
+    });
     
-    // PLAYER SPEED SLIDER
-    const playerSpeedSlider = getElement('playerSpeed');
-    if (playerSpeedSlider) {
-        playerSpeedSlider.addEventListener('input', (e) => {
-            playerSpeedMultiplier = e.target.value / 100;
-            const playerSpeedValue = getElement('playerSpeedValue');
-            if (playerSpeedValue) playerSpeedValue.textContent = e.target.value + '%';
-            saveSettings();
-        });
-    }
+    // Player Speed Slider
+    getElement('playerSpeed').addEventListener('input', (e) => {
+        playerSpeedMultiplier = e.target.value / 100;
+        getElement('playerSpeedValue').textContent = e.target.value + '%';
+        saveSettings();
+    });
     
-    // JUMP HEIGHT SLIDER
-    const jumpHeightSlider = getElement('jumpHeight');
-    if (jumpHeightSlider) {
-        jumpHeightSlider.addEventListener('input', (e) => {
-            jumpHeightMultiplier = e.target.value / 100;
-            const jumpHeightValue = getElement('jumpHeightValue');
-            if (jumpHeightValue) jumpHeightValue.textContent = e.target.value + '%';
-            saveSettings();
-        });
-    }
+    // Jump Height Slider
+    getElement('jumpHeight').addEventListener('input', (e) => {
+        jumpHeightMultiplier = e.target.value / 100;
+        getElement('jumpHeightValue').textContent = e.target.value + '%';
+        saveSettings();
+    });
     
-    // BOT SPEED SLIDER
-    const botSpeedSlider = getElement('botSpeed');
-    if (botSpeedSlider) {
-        botSpeedSlider.addEventListener('input', (e) => {
-            botSpeedMultiplier = e.target.value / 100;
-            const botSpeedValue = getElement('botSpeedValue');
-            if (botSpeedValue) botSpeedValue.textContent = e.target.value + '%';
-            saveSettings();
-        });
-    }
+    // Bot Speed Slider
+    getElement('botSpeed').addEventListener('input', (e) => {
+        botSpeedMultiplier = e.target.value / 100;
+        getElement('botSpeedValue').textContent = e.target.value + '%';
+        saveSettings();
+    });
     
-    // AUDIO VOLUME
-    const masterVolumeSlider = getElement('masterVolume');
-    if (masterVolumeSlider) {
-        masterVolumeSlider.addEventListener('input', (e) => {
-            const vol = e.target.value / 100;
-            const volumeDisplay = getElement('volumeDisplay');
-            if (volumeDisplay) volumeDisplay.textContent = e.target.value + '%';
-            if (masterGain) masterGain.gain.value = vol;
-            saveSettings();
-        });
-    }
+    // Master Volume
+    getElement('masterVolume').addEventListener('input', (e) => {
+        const vol = e.target.value / 100;
+        getElement('volumeDisplay').textContent = e.target.value + '%';
+        if (masterGain) masterGain.gain.value = vol;
+        saveSettings();
+    });
     
     // Clear memory button
-    const clearMemoryBtn = getElement('clearMemoryBtn');
-    if (clearMemoryBtn) {
-        clearMemoryBtn.addEventListener('click', clearSavedSettings);
-    }
+    getElement('clearMemoryBtn').addEventListener('click', clearSavedSettings);
     
     // Play button
-    const playBtn = getElement('playBtn');
-    if (playBtn) {
-        playBtn.addEventListener('click', startGame);
-    }
+    getElement('playBtn').addEventListener('click', startGame);
     
     // Pause menu buttons
-    const resumeBtn = getElement('resumeBtn');
-    if (resumeBtn) resumeBtn.addEventListener('click', resumeGame);
+    getElement('resumeBtn').addEventListener('click', resumeGame);
+    getElement('pauseQuitBtn').addEventListener('click', returnToMenu);
     
-    const pauseRestartBtn = getElement('pauseRestartBtn');
-    if (pauseRestartBtn) pauseRestartBtn.addEventListener('click', restartGame);
-    
-    const pauseQuitBtn = getElement('pauseQuitBtn');
-    if (pauseQuitBtn) pauseQuitBtn.addEventListener('click', returnToMenu);
-    
-    // Death screen buttons
-    const restartBtn = getElement('restartBtn');
-    if (restartBtn) restartBtn.addEventListener('click', restartGame);
-    
-    const menuBtn = getElement('menuBtn');
-    if (menuBtn) menuBtn.addEventListener('click', returnToMenu);
+    // Death screen button
+    getElement('menuBtn').addEventListener('click', returnToMenu);
     
     // Audio controls
-    const muteBtn = getElement('muteBtn');
-    if (muteBtn) {
-        muteBtn.addEventListener('click', toggleMute);
-    }
-    
-    const musicVolumeSlider = getElement('musicVolume');
-    if (musicVolumeSlider) {
-        musicVolumeSlider.addEventListener('input', (e) => {
-            if (musicGain) musicGain.gain.value = e.target.value / 100;
-        });
-    }
-    
-    const sfxVolumeSlider = getElement('sfxVolume');
-    if (sfxVolumeSlider) {
-        sfxVolumeSlider.addEventListener('input', (e) => {
-            if (sfxGain) sfxGain.gain.value = e.target.value / 100;
-        });
-    }
+    getElement('muteBtn').addEventListener('click', toggleMute);
+    getElement('musicVolume').addEventListener('input', (e) => {
+        if (musicGain) musicGain.gain.value = e.target.value / 100;
+    });
+    getElement('sfxVolume').addEventListener('input', (e) => {
+        if (sfxGain) sfxGain.gain.value = e.target.value / 100;
+    });
     
     // Pause with ESC
     document.addEventListener('keydown', (e) => {
@@ -330,11 +238,7 @@ function setupEventListeners() {
 }
 
 function updatePlayButton() {
-    const playBtn = getElement('playBtn');
-    const nextbotImageInput = getElement('nextbotImage');
-    if (playBtn && nextbotImageInput) {
-        playBtn.disabled = !nextbotImageInput.files[0];
-    }
+    getElement('playBtn').disabled = !getElement('nextbotImage').files[0];
 }
 
 function setupAudioContext() {
@@ -348,45 +252,31 @@ function setupAudioContext() {
         musicGain.connect(masterGain);
         sfxGain.connect(masterGain);
         
-        const masterVolumeSlider = getElement('masterVolume');
-        if (masterVolumeSlider) {
-            masterGain.gain.value = masterVolumeSlider.value / 100;
-        } else {
-            masterGain.gain.value = 0.5;
-        }
-        
+        masterGain.gain.value = getElement('masterVolume').value / 100;
         musicGain.gain.value = 0.7;
         sfxGain.gain.value = 0.8;
     } catch (e) {
-        console.log("Audio not supported:", e);
+        console.log("Audio not supported");
     }
 }
 
 async function startGame() {
-    const loadingDiv = getElement('loading');
-    if (loadingDiv) loadingDiv.style.display = 'block';
+    getElement('loading').style.display = 'block';
     
     try {
-        const nextbotImageInput = getElement('nextbotImage');
-        if (!nextbotImageInput || !nextbotImageInput.files[0]) {
-            alert("Please upload a Nextbot image first!");
-            if (loadingDiv) loadingDiv.style.display = 'none';
-            return;
-        }
-        
-        // Save current settings
+        // Save settings
         saveSettings();
         
-        const nextbotURL = URL.createObjectURL(nextbotImageInput.files[0]);
+        const nextbotURL = URL.createObjectURL(getElement('nextbotImage').files[0]);
         await loadAudioFiles();
         
         setTimeout(() => {
             initGame(nextbotURL);
-            if (loadingDiv) loadingDiv.style.display = 'none';
+            getElement('loading').style.display = 'none';
         }, 500);
         
     } catch (error) {
-        if (loadingDiv) loadingDiv.style.display = 'none';
+        getElement('loading').style.display = 'none';
         alert("Error loading game: " + error.message);
     }
 }
@@ -394,11 +284,8 @@ async function startGame() {
 async function loadAudioFiles() {
     if (!audioContext) return;
     
-    const bgMusicInput = getElement('bgMusic');
-    const nextbotSoundsInput = getElement('nextbotSounds');
-    
-    const bgMusicFile = bgMusicInput ? bgMusicInput.files[0] : null;
-    const nextbotSoundsFiles = nextbotSoundsInput ? nextbotSoundsInput.files : [];
+    const bgMusicFile = getElement('bgMusic').files[0];
+    const nextbotSoundsFiles = getElement('nextbotSounds').files;
     
     // Stop any existing music
     if (bgMusic) {
@@ -418,11 +305,9 @@ async function loadAudioFiles() {
     nextbotAudio = [];
     
     // Load nextbot sounds
-    if (nextbotSoundsFiles.length > 0) {
-        for (let i = 0; i < nextbotSoundsFiles.length; i++) {
-            const sound = await loadAudioFile(nextbotSoundsFiles[i], sfxGain);
-            if (sound) nextbotAudio.push(sound);
-        }
+    for (let i = 0; i < nextbotSoundsFiles.length; i++) {
+        const sound = await loadAudioFile(nextbotSoundsFiles[i], sfxGain);
+        if (sound) nextbotAudio.push(sound);
     }
 }
 
@@ -453,113 +338,53 @@ function playRandomNextbotSound() {
 
 function toggleMute() {
     isMuted = !isMuted;
-    const masterVolumeSlider = getElement('masterVolume');
-    if (masterGain) {
-        masterGain.gain.value = isMuted ? 0 : (masterVolumeSlider ? masterVolumeSlider.value / 100 : 0.5);
-    }
-    
-    const muteBtn = getElement('muteBtn');
-    if (muteBtn) {
-        muteBtn.textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
-    }
+    masterGain.gain.value = isMuted ? 0 : getElement('masterVolume').value / 100;
+    getElement('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
 }
 
 function togglePause() {
     isPaused = !isPaused;
-    const pauseMenu = getElement('pause-menu');
-    const hud = getElement('hud');
-    const crosshair = getElement('crosshair');
-    const audioControls = getElement('audioControls');
-    
-    if (pauseMenu) pauseMenu.style.display = isPaused ? 'flex' : 'none';
-    if (hud) hud.style.display = isPaused ? 'none' : 'block';
-    if (crosshair) crosshair.style.display = isPaused ? 'none' : 'block';
-    if (audioControls) audioControls.style.display = isPaused ? 'none' : 'block';
+    getElement('pause-menu').style.display = isPaused ? 'flex' : 'none';
+    getElement('hud').style.display = isPaused ? 'none' : 'block';
+    getElement('crosshair').style.display = isPaused ? 'none' : 'block';
+    getElement('audioControls').style.display = isPaused ? 'none' : 'block';
     
     if (isPaused) {
         document.exitPointerLock();
-        const pauseTime = getElement('pause-time');
-        const pauseDistance = getElement('pause-distance');
-        if (pauseTime) pauseTime.textContent = Math.floor(gameTime);
-        if (pauseDistance) pauseDistance.textContent = Math.floor(distanceTraveled);
+        getElement('pause-time').textContent = Math.floor(gameTime);
+        getElement('pause-distance').textContent = Math.floor(distanceTraveled);
     }
 }
 
 function resumeGame() {
     isPaused = false;
-    const pauseMenu = getElement('pause-menu');
-    const hud = getElement('hud');
-    const crosshair = getElement('crosshair');
-    const audioControls = getElement('audioControls');
-    
-    if (pauseMenu) pauseMenu.style.display = 'none';
-    if (hud) hud.style.display = 'block';
-    if (crosshair) crosshair.style.display = 'block';
-    if (audioControls) audioControls.style.display = 'block';
+    getElement('pause-menu').style.display = 'none';
+    getElement('hud').style.display = 'block';
+    getElement('crosshair').style.display = 'block';
+    getElement('audioControls').style.display = 'block';
 }
 
 function showDeathScreen() {
     isDead = true;
     document.exitPointerLock();
     
-    // Update death screen stats
-    const deathTime = getElement('death-time');
-    const deathDistance = getElement('death-distance');
-    const deathOverlay = getElement('death-overlay');
-    const deathTitle = getElement('death-title');
-    const deathButtons = getElement('death-buttons');
-    const hud = getElement('hud');
-    const crosshair = getElement('crosshair');
-    const audioControls = getElement('audioControls');
-    
-    if (deathTime) deathTime.textContent = Math.floor(gameTime);
-    if (deathDistance) deathDistance.textContent = Math.floor(distanceTraveled);
+    // Update stats
+    getElement('death-time').textContent = Math.floor(gameTime);
+    getElement('death-distance').textContent = Math.floor(distanceTraveled);
     
     // Show red overlay
-    if (deathOverlay) deathOverlay.style.display = 'flex';
-    if (deathTitle) deathTitle.textContent = 'GAME OVER';
+    getElement('death-overlay').style.display = 'flex';
+    getElement('death-title').textContent = 'GAME OVER';
     
-    // Hide other UI elements
-    if (hud) hud.style.display = 'none';
-    if (crosshair) crosshair.style.display = 'none';
-    if (audioControls) audioControls.style.display = 'none';
+    // Hide other UI
+    getElement('hud').style.display = 'none';
+    getElement('crosshair').style.display = 'none';
+    getElement('audioControls').style.display = 'none';
     
-    // Show buttons after 2 seconds
+    // Show button after 2 seconds
     setTimeout(() => {
-        if (deathButtons) deathButtons.style.display = 'block';
+        getElement('death-buttons').style.display = 'flex';
     }, 2000);
-}
-
-function restartGame() {
-    // Clear intervals
-    if (nextbotSoundInterval) {
-        clearInterval(nextbotSoundInterval);
-    }
-    
-    // Stop music
-    if (bgMusic) {
-        bgMusic.stop();
-    }
-    
-    // Reset game state
-    isDead = false;
-    isPaused = false;
-    isMouseLocked = false;
-    playerHealth = 100;
-    distanceTraveled = 0;
-    gameTime = 0;
-    
-    // Hide death screen
-    const deathOverlay = getElement('death-overlay');
-    const deathButtons = getElement('death-buttons');
-    const pauseMenu = getElement('pause-menu');
-    
-    if (deathOverlay) deathOverlay.style.display = 'none';
-    if (deathButtons) deathButtons.style.display = 'none';
-    if (pauseMenu) pauseMenu.style.display = 'none';
-    
-    // Restart with same settings
-    startGame();
 }
 
 function returnToMenu() {
@@ -578,20 +403,14 @@ function returnToMenu() {
     isPaused = false;
     isMouseLocked = false;
     
-    // Show menu, hide game elements
-    const menu = getElement('menu');
-    const deathOverlay = getElement('death-overlay');
-    const pauseMenu = getElement('pause-menu');
-    const hud = getElement('hud');
-    const crosshair = getElement('crosshair');
-    const audioControls = getElement('audioControls');
-    
-    if (menu) menu.style.display = 'flex';
-    if (deathOverlay) deathOverlay.style.display = 'none';
-    if (pauseMenu) pauseMenu.style.display = 'none';
-    if (hud) hud.style.display = 'none';
-    if (crosshair) crosshair.style.display = 'none';
-    if (audioControls) audioControls.style.display = 'none';
+    // Show menu, hide game
+    getElement('menu').style.display = 'flex';
+    getElement('death-overlay').style.display = 'none';
+    getElement('pause-menu').style.display = 'none';
+    getElement('hud').style.display = 'none';
+    getElement('crosshair').style.display = 'none';
+    getElement('audioControls').style.display = 'none';
+    getElement('death-buttons').style.display = 'none';
     
     // Clean up Three.js
     if (renderer) {
@@ -606,15 +425,10 @@ function returnToMenu() {
 
 // ========== GAME INITIALIZATION ==========
 function initGame(nextbotURL) {
-    const menu = getElement('menu');
-    const hud = getElement('hud');
-    const crosshair = getElement('crosshair');
-    const audioControls = getElement('audioControls');
-    
-    if (menu) menu.style.display = "none";
-    if (hud) hud.style.display = "block";
-    if (crosshair) crosshair.style.display = "block";
-    if (audioControls) audioControls.style.display = "block";
+    getElement("menu").style.display = "none";
+    getElement("hud").style.display = "block";
+    getElement("crosshair").style.display = "block";
+    getElement("audioControls").style.display = "block";
     
     // Reset game state
     isDead = false;
@@ -622,7 +436,7 @@ function initGame(nextbotURL) {
     distanceTraveled = 0;
     gameTime = 0;
     
-    // APPLY SLIDER VALUES
+    // Apply slider values
     basePlayerSpeed = 0.35 * playerSpeedMultiplier;
     maxSpeed = basePlayerSpeed;
     baseBotSpeed = 0.3 * botSpeedMultiplier;
@@ -765,10 +579,7 @@ function setupMouseControls() {
 function onPointerLockChange() {
     const canvas = renderer.domElement;
     isMouseLocked = document.pointerLockElement === canvas;
-    const crosshair = getElement('crosshair');
-    if (crosshair) {
-        crosshair.style.display = isMouseLocked && !isPaused && !isDead ? "block" : "none";
-    }
+    getElement("crosshair").style.display = isMouseLocked && !isPaused && !isDead ? "block" : "none";
 }
 
 function onMouseMove(event) {
@@ -816,8 +627,7 @@ function animate() {
     if (isPaused || isDead) return;
     
     gameTime += 1/60;
-    const timeElement = getElement('time');
-    if (timeElement) timeElement.textContent = Math.floor(gameTime);
+    getElement('time').textContent = Math.floor(gameTime);
     
     if (isMouseLocked) {
         // Player movement
@@ -830,16 +640,16 @@ function animate() {
         
         right.crossVectors(camera.up, forward).normalize();
         
-        // Apply friction first
+        // Apply friction
         velocity.multiplyScalar(friction);
         
-        // Then add acceleration based on keys
+        // Add acceleration
         if (keys["w"]) velocity.add(forward.clone().multiplyScalar(acceleration));
         if (keys["s"]) velocity.add(forward.clone().multiplyScalar(-acceleration));
         if (keys["a"]) velocity.add(right.clone().multiplyScalar(acceleration));
         if (keys["d"]) velocity.add(right.clone().multiplyScalar(-acceleration));
         
-        // Cap speed based on current maxSpeed
+        // Cap speed
         if (velocity.length() > maxSpeed) {
             velocity.normalize().multiplyScalar(maxSpeed);
         }
@@ -847,12 +657,11 @@ function animate() {
         // Move camera
         camera.position.add(velocity);
         
-        // Update HUD speed display
+        // Update HUD
         const currentSpeed = Math.round(velocity.length() * 200);
-        const speedElement = getElement('speed');
-        if (speedElement) speedElement.textContent = currentSpeed;
+        getElement('speed').textContent = currentSpeed;
         
-        // Player gravity and jumping
+        // Gravity and jumping
         playerVelocityY += gravity;
         camera.position.y += playerVelocityY;
         
@@ -865,12 +674,11 @@ function animate() {
         // Distance tracking
         distanceTraveled += camera.position.distanceTo(lastPosition) * 0.5;
         lastPosition.copy(camera.position);
-        const distanceElement = getElement('distance');
-        if (distanceElement) distanceElement.textContent = Math.floor(distanceTraveled);
+        getElement('distance').textContent = Math.floor(distanceTraveled);
         
         // Nextbot AI
         if (bot) {
-            // Apply gravity to bot
+            // Bot gravity
             botVelocityY += gravity;
             bot.position.y += botVelocityY;
             
@@ -908,20 +716,16 @@ function animate() {
             // Collision with nextbot
             if (distanceToPlayer < 8) {
                 playerHealth -= 2;
-                const healthElement = getElement('health');
-                if (healthElement) healthElement.textContent = Math.max(0, Math.floor(playerHealth));
+                getElement('health').textContent = Math.max(0, Math.floor(playerHealth));
                 
                 const shake = (8 - distanceToPlayer) / 2;
                 camera.position.x += (Math.random() - 0.5) * shake;
                 camera.position.z += (Math.random() - 0.5) * shake;
                 
-                const hud = getElement('hud');
-                if (hud) {
-                    hud.style.color = '#ff0000';
-                    setTimeout(() => {
-                        if (hud) hud.style.color = 'white';
-                    }, 100);
-                }
+                getElement("hud").style.color = '#ff0000';
+                setTimeout(() => {
+                    getElement("hud").style.color = 'white';
+                }, 100);
                 
                 if (playerHealth <= 0 && !isDead) {
                     showDeathScreen();
