@@ -8,7 +8,7 @@ const floorY = 2.0;
 let isOnGround = true;
 let playerHealth = 100;
 
-// SPEED VARIABLES - FIXED
+// SPEED VARIABLES
 let basePlayerSpeed = 0.35;
 let maxSpeed = 0.35;
 let acceleration = 0.15;
@@ -23,6 +23,7 @@ let lastPosition = new THREE.Vector3();
 let velocity = new THREE.Vector3();
 let isMouseLocked = false;
 let isPaused = false;
+let isDead = false;
 
 // ========== SLIDER VALUES ==========
 let playerSpeedMultiplier = 1;
@@ -36,45 +37,167 @@ let masterGain, musicGain, sfxGain;
 let isMuted = false;
 let nextbotSoundInterval;
 
+// ========== FILE STORAGE ==========
+let savedNextbotImage = null;
+let savedBgMusic = null;
+let savedNextbotSounds = [];
+
 // ========== UI ELEMENTS ==========
 const nextbotImageInput = document.getElementById('nextbotImage');
+const bgMusicInput = document.getElementById('bgMusic');
+const nextbotSoundsInput = document.getElementById('nextbotSounds');
 const playBtn = document.getElementById('playBtn');
 const loadingDiv = document.getElementById('loading');
+const clearMemoryBtn = document.getElementById('clearMemoryBtn');
 
 // ========== INITIALIZE ==========
 window.onload = function() {
+    loadSavedSettings();
     setupEventListeners();
     setupAudioContext();
     updatePlayButton();
 };
 
+function loadSavedSettings() {
+    // Load saved settings from localStorage
+    const savedSettings = localStorage.getItem('nzchase_settings');
+    if (savedSettings) {
+        try {
+            const settings = JSON.parse(savedSettings);
+            
+            // Load slider values
+            if (settings.playerSpeed !== undefined) {
+                document.getElementById('playerSpeed').value = settings.playerSpeed;
+                playerSpeedMultiplier = settings.playerSpeed / 100;
+                document.getElementById('playerSpeedValue').textContent = settings.playerSpeed + '%';
+            }
+            
+            if (settings.jumpHeight !== undefined) {
+                document.getElementById('jumpHeight').value = settings.jumpHeight;
+                jumpHeightMultiplier = settings.jumpHeight / 100;
+                document.getElementById('jumpHeightValue').textContent = settings.jumpHeight + '%';
+            }
+            
+            if (settings.botSpeed !== undefined) {
+                document.getElementById('botSpeed').value = settings.botSpeed;
+                botSpeedMultiplier = settings.botSpeed / 100;
+                document.getElementById('botSpeedValue').textContent = settings.botSpeed + '%';
+            }
+            
+            if (settings.masterVolume !== undefined) {
+                document.getElementById('masterVolume').value = settings.masterVolume;
+                document.getElementById('volumeDisplay').textContent = settings.masterVolume + '%';
+            }
+            
+            // Load audio file names for display
+            if (settings.nextbotImageName) {
+                document.getElementById('lastNextbotName').textContent = settings.nextbotImageName;
+                document.getElementById('lastNextbotPreview').style.display = 'block';
+            }
+            
+            if (settings.bgMusicName) {
+                document.getElementById('lastBgMusicName').textContent = settings.bgMusicName;
+                document.getElementById('lastBgMusicPreview').style.display = 'block';
+            }
+            
+            if (settings.nextbotSoundsCount) {
+                document.getElementById('lastSoundsCount').textContent = settings.nextbotSoundsCount;
+                document.getElementById('lastSoundsPreview').style.display = 'block';
+            }
+            
+            console.log("Loaded saved settings");
+            
+        } catch (e) {
+            console.error("Failed to load saved settings:", e);
+        }
+    }
+}
+
+function saveSettings() {
+    if (!document.getElementById('rememberSettings').checked) return;
+    
+    const settings = {
+        playerSpeed: document.getElementById('playerSpeed').value,
+        jumpHeight: document.getElementById('jumpHeight').value,
+        botSpeed: document.getElementById('botSpeed').value,
+        masterVolume: document.getElementById('masterVolume').value,
+        nextbotImageName: savedNextbotImage ? savedNextbotImage.name : null,
+        bgMusicName: savedBgMusic ? savedBgMusic.name : null,
+        nextbotSoundsCount: savedNextbotSounds.length
+    };
+    
+    localStorage.setItem('nzchase_settings', JSON.stringify(settings));
+    console.log("Settings saved");
+}
+
+function clearSavedSettings() {
+    localStorage.removeItem('nzchase_settings');
+    savedNextbotImage = null;
+    savedBgMusic = null;
+    savedNextbotSounds = [];
+    
+    // Reset UI
+    document.getElementById('lastNextbotPreview').style.display = 'none';
+    document.getElementById('lastBgMusicPreview').style.display = 'none';
+    document.getElementById('lastSoundsPreview').style.display = 'none';
+    
+    // Reset sliders to defaults
+    document.getElementById('playerSpeed').value = 100;
+    document.getElementById('jumpHeight').value = 100;
+    document.getElementById('botSpeed').value = 100;
+    document.getElementById('masterVolume').value = 50;
+    
+    playerSpeedMultiplier = 1;
+    jumpHeightMultiplier = 1;
+    botSpeedMultiplier = 1;
+    
+    document.getElementById('playerSpeedValue').textContent = '100%';
+    document.getElementById('jumpHeightValue').textContent = '100%';
+    document.getElementById('botSpeedValue').textContent = '100%';
+    document.getElementById('volumeDisplay').textContent = '50%';
+    
+    alert("All saved settings cleared!");
+}
+
 function setupEventListeners() {
     // Enable play button when nextbot image is uploaded
-    nextbotImageInput.addEventListener('change', updatePlayButton);
+    nextbotImageInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            savedNextbotImage = e.target.files[0];
+        }
+        updatePlayButton();
+    });
     
-    // PLAYER SPEED SLIDER - FIXED PROPERLY
+    bgMusicInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            savedBgMusic = e.target.files[0];
+        }
+    });
+    
+    nextbotSoundsInput.addEventListener('change', (e) => {
+        savedNextbotSounds = Array.from(e.target.files);
+    });
+    
+    // PLAYER SPEED SLIDER
     const playerSpeedSlider = document.getElementById('playerSpeed');
     playerSpeedSlider.addEventListener('input', (e) => {
         playerSpeedMultiplier = e.target.value / 100;
         document.getElementById('playerSpeedValue').textContent = e.target.value + '%';
-        console.log("Player Speed Multiplier:", playerSpeedMultiplier);
-        
-        // Update speed immediately for testing
-        basePlayerSpeed = 0.35 * playerSpeedMultiplier;
-        maxSpeed = basePlayerSpeed;
-        console.log("Updated basePlayerSpeed to:", basePlayerSpeed);
+        saveSettings();
     });
     
     // JUMP HEIGHT SLIDER
     document.getElementById('jumpHeight').addEventListener('input', (e) => {
         jumpHeightMultiplier = e.target.value / 100;
         document.getElementById('jumpHeightValue').textContent = e.target.value + '%';
+        saveSettings();
     });
     
     // BOT SPEED SLIDER
     document.getElementById('botSpeed').addEventListener('input', (e) => {
         botSpeedMultiplier = e.target.value / 100;
         document.getElementById('botSpeedValue').textContent = e.target.value + '%';
+        saveSettings();
     });
     
     // AUDIO VOLUME
@@ -82,15 +205,23 @@ function setupEventListeners() {
         const vol = e.target.value / 100;
         document.getElementById('volumeDisplay').textContent = e.target.value + '%';
         if (masterGain) masterGain.gain.value = vol;
+        saveSettings();
     });
+    
+    // Clear memory button
+    clearMemoryBtn.addEventListener('click', clearSavedSettings);
     
     // Play button
     playBtn.addEventListener('click', startGame);
     
     // Pause menu
     document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-    document.getElementById('restartBtn').addEventListener('click', () => location.reload());
-    document.getElementById('quitBtn').addEventListener('click', () => location.reload());
+    document.getElementById('pauseRestartBtn').addEventListener('click', restartGame);
+    document.getElementById('pauseQuitBtn').addEventListener('click', returnToMenu);
+    
+    // Death screen buttons
+    document.getElementById('restartBtn').addEventListener('click', restartGame);
+    document.getElementById('menuBtn').addEventListener('click', returnToMenu);
     
     // Audio controls
     document.getElementById('muteBtn').addEventListener('click', toggleMute);
@@ -103,7 +234,7 @@ function setupEventListeners() {
     
     // Pause with ESC
     document.addEventListener('keydown', (e) => {
-        if (e.code === 'Escape' && isMouseLocked) {
+        if (e.code === 'Escape' && isMouseLocked && !isDead) {
             togglePause();
         }
     });
@@ -124,7 +255,7 @@ function setupAudioContext() {
         musicGain.connect(masterGain);
         sfxGain.connect(masterGain);
         
-        masterGain.gain.value = 0.5;
+        masterGain.gain.value = document.getElementById('masterVolume').value / 100;
         musicGain.gain.value = 0.7;
         sfxGain.gain.value = 0.8;
     } catch (e) {
@@ -136,6 +267,9 @@ async function startGame() {
     loadingDiv.style.display = 'block';
     
     try {
+        // Save current settings
+        saveSettings();
+        
         const nextbotURL = URL.createObjectURL(nextbotImageInput.files[0]);
         await loadAudioFiles();
         
@@ -153,8 +287,13 @@ async function startGame() {
 async function loadAudioFiles() {
     if (!audioContext) return;
     
-    const bgMusicFile = document.getElementById('bgMusic').files[0];
-    const nextbotSoundsFiles = document.getElementById('nextbotSounds').files;
+    const bgMusicFile = bgMusicInput.files[0];
+    const nextbotSoundsFiles = nextbotSoundsInput.files;
+    
+    // Stop any existing music
+    if (bgMusic) {
+        bgMusic.stop();
+    }
     
     // Load background music
     if (bgMusicFile) {
@@ -164,6 +303,9 @@ async function loadAudioFiles() {
             bgMusic.start();
         }
     }
+    
+    // Clear existing sounds
+    nextbotAudio = [];
     
     // Load nextbot sounds
     if (nextbotSoundsFiles.length > 0) {
@@ -190,7 +332,7 @@ function loadAudioFile(file, destination) {
 }
 
 function playRandomNextbotSound() {
-    if (nextbotAudio.length > 0 && !isMuted) {
+    if (nextbotAudio.length > 0 && !isMuted && !isDead) {
         const sound = nextbotAudio[Math.floor(Math.random() * nextbotAudio.length)];
         const newSound = audioContext.createBufferSource();
         newSound.buffer = sound.buffer;
@@ -201,7 +343,7 @@ function playRandomNextbotSound() {
 
 function toggleMute() {
     isMuted = !isMuted;
-    masterGain.gain.value = isMuted ? 0 : 0.5;
+    masterGain.gain.value = isMuted ? 0 : document.getElementById('masterVolume').value / 100;
     document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
 }
 
@@ -227,6 +369,92 @@ function resumeGame() {
     document.getElementById('audioControls').style.display = 'block';
 }
 
+function showDeathScreen() {
+    isDead = true;
+    document.exitPointerLock();
+    
+    // Update death screen stats
+    document.getElementById('death-time').textContent = Math.floor(gameTime);
+    document.getElementById('death-distance').textContent = Math.floor(distanceTraveled);
+    
+    // Show red overlay
+    document.getElementById('death-overlay').style.display = 'flex';
+    document.getElementById('death-title').textContent = 'GAME OVER';
+    
+    // Hide other UI elements
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('crosshair').style.display = 'none';
+    document.getElementById('audioControls').style.display = 'none';
+    
+    // Show buttons after 2 seconds
+    setTimeout(() => {
+        document.getElementById('death-buttons').style.display = 'block';
+    }, 2000);
+}
+
+function restartGame() {
+    // Clear intervals
+    if (nextbotSoundInterval) {
+        clearInterval(nextbotSoundInterval);
+    }
+    
+    // Stop music
+    if (bgMusic) {
+        bgMusic.stop();
+    }
+    
+    // Reset game state
+    isDead = false;
+    isPaused = false;
+    isMouseLocked = false;
+    playerHealth = 100;
+    distanceTraveled = 0;
+    gameTime = 0;
+    
+    // Hide death screen
+    document.getElementById('death-overlay').style.display = 'none';
+    document.getElementById('death-buttons').style.display = 'none';
+    document.getElementById('pause-menu').style.display = 'none';
+    
+    // Restart with same settings
+    startGame();
+}
+
+function returnToMenu() {
+    // Clear intervals
+    if (nextbotSoundInterval) {
+        clearInterval(nextbotSoundInterval);
+    }
+    
+    // Stop music
+    if (bgMusic) {
+        bgMusic.stop();
+    }
+    
+    // Reset game state
+    isDead = false;
+    isPaused = false;
+    isMouseLocked = false;
+    
+    // Show menu, hide game elements
+    document.getElementById('menu').style.display = 'flex';
+    document.getElementById('death-overlay').style.display = 'none';
+    document.getElementById('pause-menu').style.display = 'none';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('crosshair').style.display = 'none';
+    document.getElementById('audioControls').style.display = 'none';
+    
+    // Clean up Three.js
+    if (renderer) {
+        document.body.removeChild(renderer.domElement);
+        renderer = null;
+    }
+    
+    scene = null;
+    camera = null;
+    bot = null;
+}
+
 // ========== GAME INITIALIZATION ==========
 function initGame(nextbotURL) {
     document.getElementById("menu").style.display = "none";
@@ -234,14 +462,16 @@ function initGame(nextbotURL) {
     document.getElementById("crosshair").style.display = "block";
     document.getElementById("audioControls").style.display = "block";
     
-    // APPLY SLIDER VALUES - ALL WORKING NOW
-    basePlayerSpeed = 0.35 * playerSpeedMultiplier; // PLAYER SPEED SLIDER WORKS
-    maxSpeed = basePlayerSpeed;
-    baseBotSpeed = 0.3 * botSpeedMultiplier; // BOT SPEED SLIDER WORKS
+    // Reset game state
+    isDead = false;
+    playerHealth = 100;
+    distanceTraveled = 0;
+    gameTime = 0;
     
-    console.log("Player Speed:", basePlayerSpeed);
-    console.log("Jump Height Multiplier:", jumpHeightMultiplier);
-    console.log("Bot Speed:", baseBotSpeed);
+    // APPLY SLIDER VALUES
+    basePlayerSpeed = 0.35 * playerSpeedMultiplier;
+    maxSpeed = basePlayerSpeed;
+    baseBotSpeed = 0.3 * botSpeedMultiplier;
     
     // Create scene
     scene = new THREE.Scene();
@@ -251,7 +481,7 @@ function initGame(nextbotURL) {
     // Create camera
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, floorY, 5);
-    camera.rotation.x = 0; // LOCK VERTICAL ROTATION
+    camera.rotation.x = 0;
     lastPosition.copy(camera.position);
 
     // Create renderer
@@ -278,7 +508,6 @@ function initGame(nextbotURL) {
     createNextbot(nextbotURL);
 
     // Start game loop
-    gameTime = 0;
     animate();
     
     // Start nextbot sound interval
@@ -370,7 +599,7 @@ function setupMouseControls() {
     const canvas = renderer.domElement;
     
     canvas.addEventListener('click', () => {
-        if (!isMouseLocked && !isPaused) {
+        if (!isMouseLocked && !isPaused && !isDead) {
             canvas.requestPointerLock();
         }
     });
@@ -382,33 +611,33 @@ function setupMouseControls() {
 function onPointerLockChange() {
     const canvas = renderer.domElement;
     isMouseLocked = document.pointerLockElement === canvas;
-    document.getElementById("crosshair").style.display = isMouseLocked && !isPaused ? "block" : "none";
+    document.getElementById("crosshair").style.display = isMouseLocked && !isPaused && !isDead ? "block" : "none";
 }
 
 function onMouseMove(event) {
-    if (!isMouseLocked || isPaused) return;
+    if (!isMouseLocked || isPaused || isDead) return;
     
     const movementX = event.movementX || 0;
     yaw -= movementX * mouseSensitivity;
     camera.rotation.y += (yaw - camera.rotation.y) * 0.2;
-    camera.rotation.x = 0; // Keep level
+    camera.rotation.x = 0;
 }
 
 // ========== KEYBOARD CONTROLS ==========
 const keys = {};
 window.onkeydown = e => {
-    if (isPaused) return;
+    if (isPaused || isDead) return;
     
     const key = e.key.toLowerCase();
     keys[key] = true;
     
     if (e.code === 'Space' && isOnGround) {
-        playerVelocityY = 0.8 * jumpHeightMultiplier; // JUMP HEIGHT SLIDER WORKS
+        playerVelocityY = 0.8 * jumpHeightMultiplier;
         isOnGround = false;
     }
     
     if (key === 'shift') {
-        maxSpeed = basePlayerSpeed * 1.8; // Sprint is 1.8x base speed (PLAYER SPEED SLIDER WORKS)
+        maxSpeed = basePlayerSpeed * 1.8;
         acceleration = 0.2;
     }
 };
@@ -418,7 +647,7 @@ window.onkeyup = e => {
     keys[key] = false;
     
     if (key === 'shift') {
-        maxSpeed = basePlayerSpeed; // Back to normal speed (PLAYER SPEED SLIDER WORKS)
+        maxSpeed = basePlayerSpeed;
         acceleration = 0.15;
     }
 };
@@ -427,13 +656,13 @@ window.onkeyup = e => {
 function animate() {
     requestAnimationFrame(animate);
     
-    if (isPaused) return;
+    if (isPaused || isDead) return;
     
     gameTime += 1/60;
     document.getElementById('time').textContent = Math.floor(gameTime);
     
     if (isMouseLocked) {
-        // Player movement - FIXED: Don't reset velocity each frame
+        // Player movement
         const forward = new THREE.Vector3();
         const right = new THREE.Vector3();
         
@@ -452,19 +681,19 @@ function animate() {
         if (keys["a"]) velocity.add(right.clone().multiplyScalar(acceleration));
         if (keys["d"]) velocity.add(right.clone().multiplyScalar(-acceleration));
         
-        // Cap speed based on current maxSpeed (affected by player speed slider)
+        // Cap speed based on current maxSpeed
         if (velocity.length() > maxSpeed) {
             velocity.normalize().multiplyScalar(maxSpeed);
         }
         
-        // Move camera - THIS IS WHERE PLAYER SPEED SLIDER TAKES EFFECT
+        // Move camera
         camera.position.add(velocity);
         
-        // Update HUD speed display - SHOW ACTUAL SPEED
-        const currentSpeed = Math.round(velocity.length() * 200); // Changed from 100 to 200 for better visibility
+        // Update HUD speed display
+        const currentSpeed = Math.round(velocity.length() * 200);
         document.getElementById('speed').textContent = currentSpeed;
         
-        // Player gravity and jumping - JUMP HEIGHT SLIDER WORKS
+        // Player gravity and jumping
         playerVelocityY += gravity;
         camera.position.y += playerVelocityY;
         
@@ -479,7 +708,7 @@ function animate() {
         lastPosition.copy(camera.position);
         document.getElementById('distance').textContent = Math.floor(distanceTraveled);
         
-        // Nextbot AI - BOT SPEED SLIDER WORKS
+        // Nextbot AI
         if (bot) {
             // Apply gravity to bot
             botVelocityY += gravity;
@@ -490,11 +719,11 @@ function animate() {
                 botVelocityY = 0;
             }
             
-            // Bot movement - BOT SPEED SLIDER AFFECTS THIS
+            // Bot movement
             const dir = new THREE.Vector3();
             dir.subVectors(camera.position, bot.position).normalize();
             
-            let currentBotSpeed = baseBotSpeed; // Affected by bot speed slider
+            let currentBotSpeed = baseBotSpeed;
             const distanceToPlayer = bot.position.distanceTo(camera.position);
             
             if (distanceToPlayer < 20) {
@@ -530,10 +759,8 @@ function animate() {
                     document.getElementById("hud").style.color = 'white';
                 }, 100);
                 
-                if (playerHealth <= 0) {
-                    clearInterval(nextbotSoundInterval);
-                    alert(`GAME OVER!\nTime: ${Math.floor(gameTime)}s\nDistance: ${Math.floor(distanceTraveled)}m`);
-                    location.reload();
+                if (playerHealth <= 0 && !isDead) {
+                    showDeathScreen();
                 }
             }
             
