@@ -81,16 +81,6 @@
     display: none;
     pointer-events: none;
   }
-  .audio-controls {
-    display: none;
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    background: rgba(0,0,0,0.8);
-    padding: 10px;
-    border-radius: 10px;
-    z-index: 50;
-  }
   #loading {
     position: absolute;
     top: 50%;
@@ -123,25 +113,23 @@
   <p>Upload Nextbot Image (Required):</p>
   <input type="file" id="nextbotImage" accept="image/*" class="file-input">
   
-  <p style="margin-top: 20px; color: #aaa;">Optional Settings:</p>
-  
   <div class="slider-container">
     <label>Player Speed: <span id="playerSpeedValue">100%</span></label>
-    <input type="range" id="playerSpeed" min="50" max="200" value="100" style="width: 250px;">
+    <input type="range" id="playerSpeed" min="50" max="300" value="100" style="width: 250px;">
   </div>
   
   <div class="slider-container">
     <label>Jump Height: <span id="jumpHeightValue">100%</span></label>
-    <input type="range" id="jumpHeight" min="50" max="200" value="100" style="width: 250px;">
+    <input type="range" id="jumpHeight" min="50" max="300" value="100" style="width: 250px;">
   </div>
   
   <div class="slider-container">
     <label>Bot Speed: <span id="botSpeedValue">100%</span></label>
-    <input type="range" id="botSpeed" min="50" max="200" value="100" style="width: 250px;">
+    <input type="range" id="botSpeed" min="50" max="300" value="100" style="width: 250px;">
   </div>
   
   <p style="color: #aaa; font-size: 14px; margin-top: 20px;">
-    WASD to move • Mouse side-to-side only • SPACE to jump • ESC to pause
+    WASD to move • Mouse side-to-side only • SPACE to jump • SHIFT to sprint • ESC to pause
   </p>
   
   <button id="playBtn" disabled>START GAME</button>
@@ -185,7 +173,7 @@ let basePlayerSpeed = 0.35;
 let maxSpeed = 0.35;
 let acceleration = 0.15;
 let friction = 0.9;
-let baseBotSpeed = 0.18;
+let baseBotSpeed = 0.3; // FASTER BASE SPEED
 let mouseSensitivity = 0.002;
 let yaw = 0;
 let distanceTraveled = 0;
@@ -194,6 +182,11 @@ let lastPosition = new THREE.Vector3();
 let velocity = new THREE.Vector3();
 let isMouseLocked = false;
 let isPaused = false;
+
+// ========== SLIDER VALUES (ALL WILL WORK) ==========
+let playerSpeedMultiplier = 1;
+let jumpHeightMultiplier = 1;
+let botSpeedMultiplier = 1;
 
 // ========== UI ELEMENTS ==========
 const nextbotImageInput = document.getElementById('nextbotImage');
@@ -210,16 +203,19 @@ function setupEventListeners() {
   // Enable play button when nextbot image is uploaded
   nextbotImageInput.addEventListener('change', updatePlayButton);
   
-  // Slider value displays (FIXED - these were missing!)
+  // ALL SLIDERS WORK NOW
   document.getElementById('playerSpeed').addEventListener('input', (e) => {
+    playerSpeedMultiplier = e.target.value / 100;
     document.getElementById('playerSpeedValue').textContent = e.target.value + '%';
   });
   
   document.getElementById('jumpHeight').addEventListener('input', (e) => {
+    jumpHeightMultiplier = e.target.value / 100;
     document.getElementById('jumpHeightValue').textContent = e.target.value + '%';
   });
   
   document.getElementById('botSpeed').addEventListener('input', (e) => {
+    botSpeedMultiplier = e.target.value / 100;
     document.getElementById('botSpeedValue').textContent = e.target.value + '%';
   });
   
@@ -249,18 +245,8 @@ function startGame() {
   try {
     const nextbotURL = URL.createObjectURL(nextbotImageInput.files[0]);
     
-    // Get slider values (ACTUALLY USE THEM NOW)
-    const playerSpeedMultiplier = parseInt(document.getElementById('playerSpeed').value) / 100;
-    const jumpHeightMultiplier = parseInt(document.getElementById('jumpHeight').value) / 100;
-    const botSpeedMultiplier = parseInt(document.getElementById('botSpeed').value) / 100;
-    
-    // Apply slider values
-    basePlayerSpeed = 0.35 * playerSpeedMultiplier;
-    maxSpeed = basePlayerSpeed;
-    baseBotSpeed = 0.18 * botSpeedMultiplier;
-    
     setTimeout(() => {
-      initGame(nextbotURL, jumpHeightMultiplier);
+      initGame(nextbotURL);
       loadingDiv.style.display = 'none';
     }, 500);
     
@@ -291,10 +277,15 @@ function resumeGame() {
 }
 
 // ========== GAME INITIALIZATION ==========
-function initGame(nextbotURL, jumpHeightMultiplier) {
+function initGame(nextbotURL) {
   document.getElementById("menu").style.display = "none";
   document.getElementById("hud").style.display = "block";
   document.getElementById("crosshair").style.display = "block";
+  
+  // Apply slider multipliers
+  basePlayerSpeed = 0.35 * playerSpeedMultiplier;
+  maxSpeed = basePlayerSpeed;
+  baseBotSpeed = 0.3 * botSpeedMultiplier;
   
   // Create scene
   scene = new THREE.Scene();
@@ -329,9 +320,6 @@ function initGame(nextbotURL, jumpHeightMultiplier) {
 
   // Create Nextbot
   createNextbot(nextbotURL);
-
-  // Store jump height multiplier
-  window.jumpHeightMultiplier = jumpHeightMultiplier;
   
   // Start game loop
   gameTime = 0;
@@ -455,12 +443,12 @@ window.onkeydown = e => {
   keys[key] = true;
   
   if (e.code === 'Space' && isOnGround) {
-    playerVelocityY = 0.8 * window.jumpHeightMultiplier;
+    playerVelocityY = 0.8 * jumpHeightMultiplier; // JUMP HEIGHT SLIDER WORKS
     isOnGround = false;
   }
   
   if (key === 'shift') {
-    maxSpeed = basePlayerSpeed * 1.5;
+    maxSpeed = basePlayerSpeed * 1.8; // Sprint is 1.8x base speed
     acceleration = 0.2;
   }
 };
@@ -470,7 +458,7 @@ window.onkeyup = e => {
   keys[key] = false;
   
   if (key === 'shift') {
-    maxSpeed = basePlayerSpeed;
+    maxSpeed = basePlayerSpeed; // Back to normal speed (PLAYER SPEED SLIDER WORKS)
     acceleration = 0.15;
   }
 };
@@ -484,7 +472,7 @@ function animate() {
   gameTime += 1/60;
   
   if (isMouseLocked) {
-    // Player movement
+    // Player movement - PLAYER SPEED SLIDER AFFECTS THIS
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
     
@@ -514,7 +502,7 @@ function animate() {
     const currentSpeed = Math.round(velocity.length() * 100);
     document.getElementById('speed').textContent = currentSpeed;
     
-    // Player gravity and jumping
+    // Player gravity and jumping - JUMP HEIGHT SLIDER WORKS
     playerVelocityY += gravity;
     camera.position.y += playerVelocityY;
     
@@ -529,7 +517,7 @@ function animate() {
     lastPosition.copy(camera.position);
     document.getElementById('distance').textContent = Math.floor(distanceTraveled);
     
-    // Nextbot AI with GRAVITY
+    // Nextbot AI with GRAVITY - BOT SPEED SLIDER WORKS
     if (bot) {
       // Apply gravity to bot
       botVelocityY += gravity;
@@ -541,11 +529,11 @@ function animate() {
         botVelocityY = 0;
       }
       
-      // Bot movement towards player
+      // Bot movement towards player - BOT SPEED SLIDER AFFECTS THIS
       const dir = new THREE.Vector3();
       dir.subVectors(camera.position, bot.position).normalize();
       
-      let currentBotSpeed = baseBotSpeed;
+      let currentBotSpeed = baseBotSpeed; // AFFECTED BY SLIDER
       const distanceToPlayer = bot.position.distanceTo(camera.position);
       
       if (distanceToPlayer < 20) {
