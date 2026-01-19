@@ -42,21 +42,31 @@ let savedNextbotImage = null;
 let savedBgMusic = null;
 let savedNextbotSounds = [];
 
-// ========== UI ELEMENTS ==========
-const nextbotImageInput = document.getElementById('nextbotImage');
-const bgMusicInput = document.getElementById('bgMusic');
-const nextbotSoundsInput = document.getElementById('nextbotSounds');
-const playBtn = document.getElementById('playBtn');
-const loadingDiv = document.getElementById('loading');
-const clearMemoryBtn = document.getElementById('clearMemoryBtn');
+// ========== UI ELEMENT GETTERS (SAFE) ==========
+function getElement(id) {
+    const element = document.getElementById(id);
+    if (!element) {
+        console.warn(`Element with id "${id}" not found`);
+    }
+    return element;
+}
 
 // ========== INITIALIZE ==========
-window.onload = function() {
-    loadSavedSettings();
-    setupEventListeners();
-    setupAudioContext();
-    updatePlayButton();
-};
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait for DOM to be fully loaded
+    setTimeout(() => {
+        if (typeof THREE === 'undefined') {
+            console.error("Three.js failed to load!");
+            alert("Three.js library failed to load. Please refresh the page or check your internet connection.");
+            return;
+        }
+        
+        loadSavedSettings();
+        setupEventListeners();
+        setupAudioContext();
+        updatePlayButton();
+    }, 100);
+});
 
 function loadSavedSettings() {
     // Load saved settings from localStorage
@@ -65,44 +75,59 @@ function loadSavedSettings() {
         try {
             const settings = JSON.parse(savedSettings);
             
-            // Load slider values
-            if (settings.playerSpeed !== undefined) {
-                document.getElementById('playerSpeed').value = settings.playerSpeed;
+            // Load slider values (with null checks)
+            const playerSpeedSlider = getElement('playerSpeed');
+            const jumpHeightSlider = getElement('jumpHeight');
+            const botSpeedSlider = getElement('botSpeed');
+            const masterVolumeSlider = getElement('masterVolume');
+            
+            if (settings.playerSpeed !== undefined && playerSpeedSlider) {
+                playerSpeedSlider.value = settings.playerSpeed;
                 playerSpeedMultiplier = settings.playerSpeed / 100;
-                document.getElementById('playerSpeedValue').textContent = settings.playerSpeed + '%';
+                const playerSpeedValue = getElement('playerSpeedValue');
+                if (playerSpeedValue) playerSpeedValue.textContent = settings.playerSpeed + '%';
             }
             
-            if (settings.jumpHeight !== undefined) {
-                document.getElementById('jumpHeight').value = settings.jumpHeight;
+            if (settings.jumpHeight !== undefined && jumpHeightSlider) {
+                jumpHeightSlider.value = settings.jumpHeight;
                 jumpHeightMultiplier = settings.jumpHeight / 100;
-                document.getElementById('jumpHeightValue').textContent = settings.jumpHeight + '%';
+                const jumpHeightValue = getElement('jumpHeightValue');
+                if (jumpHeightValue) jumpHeightValue.textContent = settings.jumpHeight + '%';
             }
             
-            if (settings.botSpeed !== undefined) {
-                document.getElementById('botSpeed').value = settings.botSpeed;
+            if (settings.botSpeed !== undefined && botSpeedSlider) {
+                botSpeedSlider.value = settings.botSpeed;
                 botSpeedMultiplier = settings.botSpeed / 100;
-                document.getElementById('botSpeedValue').textContent = settings.botSpeed + '%';
+                const botSpeedValue = getElement('botSpeedValue');
+                if (botSpeedValue) botSpeedValue.textContent = settings.botSpeed + '%';
             }
             
-            if (settings.masterVolume !== undefined) {
-                document.getElementById('masterVolume').value = settings.masterVolume;
-                document.getElementById('volumeDisplay').textContent = settings.masterVolume + '%';
+            if (settings.masterVolume !== undefined && masterVolumeSlider) {
+                masterVolumeSlider.value = settings.masterVolume;
+                const volumeDisplay = getElement('volumeDisplay');
+                if (volumeDisplay) volumeDisplay.textContent = settings.masterVolume + '%';
             }
             
             // Load audio file names for display
             if (settings.nextbotImageName) {
-                document.getElementById('lastNextbotName').textContent = settings.nextbotImageName;
-                document.getElementById('lastNextbotPreview').style.display = 'block';
+                const lastNextbotName = getElement('lastNextbotName');
+                const lastNextbotPreview = getElement('lastNextbotPreview');
+                if (lastNextbotName) lastNextbotName.textContent = settings.nextbotImageName;
+                if (lastNextbotPreview) lastNextbotPreview.style.display = 'block';
             }
             
             if (settings.bgMusicName) {
-                document.getElementById('lastBgMusicName').textContent = settings.bgMusicName;
-                document.getElementById('lastBgMusicPreview').style.display = 'block';
+                const lastBgMusicName = getElement('lastBgMusicName');
+                const lastBgMusicPreview = getElement('lastBgMusicPreview');
+                if (lastBgMusicName) lastBgMusicName.textContent = settings.bgMusicName;
+                if (lastBgMusicPreview) lastBgMusicPreview.style.display = 'block';
             }
             
             if (settings.nextbotSoundsCount) {
-                document.getElementById('lastSoundsCount').textContent = settings.nextbotSoundsCount;
-                document.getElementById('lastSoundsPreview').style.display = 'block';
+                const lastSoundsCount = getElement('lastSoundsCount');
+                const lastSoundsPreview = getElement('lastSoundsPreview');
+                if (lastSoundsCount) lastSoundsCount.textContent = settings.nextbotSoundsCount;
+                if (lastSoundsPreview) lastSoundsPreview.style.display = 'block';
             }
             
             console.log("Loaded saved settings");
@@ -114,13 +139,14 @@ function loadSavedSettings() {
 }
 
 function saveSettings() {
-    if (!document.getElementById('rememberSettings').checked) return;
+    const rememberCheckbox = getElement('rememberSettings');
+    if (!rememberCheckbox || !rememberCheckbox.checked) return;
     
     const settings = {
-        playerSpeed: document.getElementById('playerSpeed').value,
-        jumpHeight: document.getElementById('jumpHeight').value,
-        botSpeed: document.getElementById('botSpeed').value,
-        masterVolume: document.getElementById('masterVolume').value,
+        playerSpeed: getElement('playerSpeed') ? getElement('playerSpeed').value : 100,
+        jumpHeight: getElement('jumpHeight') ? getElement('jumpHeight').value : 100,
+        botSpeed: getElement('botSpeed') ? getElement('botSpeed').value : 100,
+        masterVolume: getElement('masterVolume') ? getElement('masterVolume').value : 50,
         nextbotImageName: savedNextbotImage ? savedNextbotImage.name : null,
         bgMusicName: savedBgMusic ? savedBgMusic.name : null,
         nextbotSoundsCount: savedNextbotSounds.length
@@ -137,100 +163,163 @@ function clearSavedSettings() {
     savedNextbotSounds = [];
     
     // Reset UI
-    document.getElementById('lastNextbotPreview').style.display = 'none';
-    document.getElementById('lastBgMusicPreview').style.display = 'none';
-    document.getElementById('lastSoundsPreview').style.display = 'none';
+    const lastNextbotPreview = getElement('lastNextbotPreview');
+    const lastBgMusicPreview = getElement('lastBgMusicPreview');
+    const lastSoundsPreview = getElement('lastSoundsPreview');
+    
+    if (lastNextbotPreview) lastNextbotPreview.style.display = 'none';
+    if (lastBgMusicPreview) lastBgMusicPreview.style.display = 'none';
+    if (lastSoundsPreview) lastSoundsPreview.style.display = 'none';
     
     // Reset sliders to defaults
-    document.getElementById('playerSpeed').value = 100;
-    document.getElementById('jumpHeight').value = 100;
-    document.getElementById('botSpeed').value = 100;
-    document.getElementById('masterVolume').value = 50;
+    const playerSpeedSlider = getElement('playerSpeed');
+    const jumpHeightSlider = getElement('jumpHeight');
+    const botSpeedSlider = getElement('botSpeed');
+    const masterVolumeSlider = getElement('masterVolume');
+    
+    if (playerSpeedSlider) playerSpeedSlider.value = 100;
+    if (jumpHeightSlider) jumpHeightSlider.value = 100;
+    if (botSpeedSlider) botSpeedSlider.value = 100;
+    if (masterVolumeSlider) masterVolumeSlider.value = 50;
     
     playerSpeedMultiplier = 1;
     jumpHeightMultiplier = 1;
     botSpeedMultiplier = 1;
     
-    document.getElementById('playerSpeedValue').textContent = '100%';
-    document.getElementById('jumpHeightValue').textContent = '100%';
-    document.getElementById('botSpeedValue').textContent = '100%';
-    document.getElementById('volumeDisplay').textContent = '50%';
+    const playerSpeedValue = getElement('playerSpeedValue');
+    const jumpHeightValue = getElement('jumpHeightValue');
+    const botSpeedValue = getElement('botSpeedValue');
+    const volumeDisplay = getElement('volumeDisplay');
+    
+    if (playerSpeedValue) playerSpeedValue.textContent = '100%';
+    if (jumpHeightValue) jumpHeightValue.textContent = '100%';
+    if (botSpeedValue) botSpeedValue.textContent = '100%';
+    if (volumeDisplay) volumeDisplay.textContent = '50%';
     
     alert("All saved settings cleared!");
 }
 
 function setupEventListeners() {
     // Enable play button when nextbot image is uploaded
-    nextbotImageInput.addEventListener('change', (e) => {
-        if (e.target.files[0]) {
-            savedNextbotImage = e.target.files[0];
-        }
-        updatePlayButton();
-    });
+    const nextbotImageInput = getElement('nextbotImage');
+    if (nextbotImageInput) {
+        nextbotImageInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                savedNextbotImage = e.target.files[0];
+            }
+            updatePlayButton();
+        });
+    }
     
-    bgMusicInput.addEventListener('change', (e) => {
-        if (e.target.files[0]) {
-            savedBgMusic = e.target.files[0];
-        }
-    });
+    const bgMusicInput = getElement('bgMusic');
+    if (bgMusicInput) {
+        bgMusicInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                savedBgMusic = e.target.files[0];
+            }
+        });
+    }
     
-    nextbotSoundsInput.addEventListener('change', (e) => {
-        savedNextbotSounds = Array.from(e.target.files);
-    });
+    const nextbotSoundsInput = getElement('nextbotSounds');
+    if (nextbotSoundsInput) {
+        nextbotSoundsInput.addEventListener('change', (e) => {
+            savedNextbotSounds = Array.from(e.target.files);
+        });
+    }
     
     // PLAYER SPEED SLIDER
-    const playerSpeedSlider = document.getElementById('playerSpeed');
-    playerSpeedSlider.addEventListener('input', (e) => {
-        playerSpeedMultiplier = e.target.value / 100;
-        document.getElementById('playerSpeedValue').textContent = e.target.value + '%';
-        saveSettings();
-    });
+    const playerSpeedSlider = getElement('playerSpeed');
+    if (playerSpeedSlider) {
+        playerSpeedSlider.addEventListener('input', (e) => {
+            playerSpeedMultiplier = e.target.value / 100;
+            const playerSpeedValue = getElement('playerSpeedValue');
+            if (playerSpeedValue) playerSpeedValue.textContent = e.target.value + '%';
+            saveSettings();
+        });
+    }
     
     // JUMP HEIGHT SLIDER
-    document.getElementById('jumpHeight').addEventListener('input', (e) => {
-        jumpHeightMultiplier = e.target.value / 100;
-        document.getElementById('jumpHeightValue').textContent = e.target.value + '%';
-        saveSettings();
-    });
+    const jumpHeightSlider = getElement('jumpHeight');
+    if (jumpHeightSlider) {
+        jumpHeightSlider.addEventListener('input', (e) => {
+            jumpHeightMultiplier = e.target.value / 100;
+            const jumpHeightValue = getElement('jumpHeightValue');
+            if (jumpHeightValue) jumpHeightValue.textContent = e.target.value + '%';
+            saveSettings();
+        });
+    }
     
     // BOT SPEED SLIDER
-    document.getElementById('botSpeed').addEventListener('input', (e) => {
-        botSpeedMultiplier = e.target.value / 100;
-        document.getElementById('botSpeedValue').textContent = e.target.value + '%';
-        saveSettings();
-    });
+    const botSpeedSlider = getElement('botSpeed');
+    if (botSpeedSlider) {
+        botSpeedSlider.addEventListener('input', (e) => {
+            botSpeedMultiplier = e.target.value / 100;
+            const botSpeedValue = getElement('botSpeedValue');
+            if (botSpeedValue) botSpeedValue.textContent = e.target.value + '%';
+            saveSettings();
+        });
+    }
     
     // AUDIO VOLUME
-    document.getElementById('masterVolume').addEventListener('input', (e) => {
-        const vol = e.target.value / 100;
-        document.getElementById('volumeDisplay').textContent = e.target.value + '%';
-        if (masterGain) masterGain.gain.value = vol;
-        saveSettings();
-    });
+    const masterVolumeSlider = getElement('masterVolume');
+    if (masterVolumeSlider) {
+        masterVolumeSlider.addEventListener('input', (e) => {
+            const vol = e.target.value / 100;
+            const volumeDisplay = getElement('volumeDisplay');
+            if (volumeDisplay) volumeDisplay.textContent = e.target.value + '%';
+            if (masterGain) masterGain.gain.value = vol;
+            saveSettings();
+        });
+    }
     
     // Clear memory button
-    clearMemoryBtn.addEventListener('click', clearSavedSettings);
+    const clearMemoryBtn = getElement('clearMemoryBtn');
+    if (clearMemoryBtn) {
+        clearMemoryBtn.addEventListener('click', clearSavedSettings);
+    }
     
     // Play button
-    playBtn.addEventListener('click', startGame);
+    const playBtn = getElement('playBtn');
+    if (playBtn) {
+        playBtn.addEventListener('click', startGame);
+    }
     
-    // Pause menu
-    document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-    document.getElementById('pauseRestartBtn').addEventListener('click', restartGame);
-    document.getElementById('pauseQuitBtn').addEventListener('click', returnToMenu);
+    // Pause menu buttons
+    const resumeBtn = getElement('resumeBtn');
+    if (resumeBtn) resumeBtn.addEventListener('click', resumeGame);
+    
+    const pauseRestartBtn = getElement('pauseRestartBtn');
+    if (pauseRestartBtn) pauseRestartBtn.addEventListener('click', restartGame);
+    
+    const pauseQuitBtn = getElement('pauseQuitBtn');
+    if (pauseQuitBtn) pauseQuitBtn.addEventListener('click', returnToMenu);
     
     // Death screen buttons
-    document.getElementById('restartBtn').addEventListener('click', restartGame);
-    document.getElementById('menuBtn').addEventListener('click', returnToMenu);
+    const restartBtn = getElement('restartBtn');
+    if (restartBtn) restartBtn.addEventListener('click', restartGame);
+    
+    const menuBtn = getElement('menuBtn');
+    if (menuBtn) menuBtn.addEventListener('click', returnToMenu);
     
     // Audio controls
-    document.getElementById('muteBtn').addEventListener('click', toggleMute);
-    document.getElementById('musicVolume').addEventListener('input', (e) => {
-        if (musicGain) musicGain.gain.value = e.target.value / 100;
-    });
-    document.getElementById('sfxVolume').addEventListener('input', (e) => {
-        if (sfxGain) sfxGain.gain.value = e.target.value / 100;
-    });
+    const muteBtn = getElement('muteBtn');
+    if (muteBtn) {
+        muteBtn.addEventListener('click', toggleMute);
+    }
+    
+    const musicVolumeSlider = getElement('musicVolume');
+    if (musicVolumeSlider) {
+        musicVolumeSlider.addEventListener('input', (e) => {
+            if (musicGain) musicGain.gain.value = e.target.value / 100;
+        });
+    }
+    
+    const sfxVolumeSlider = getElement('sfxVolume');
+    if (sfxVolumeSlider) {
+        sfxVolumeSlider.addEventListener('input', (e) => {
+            if (sfxGain) sfxGain.gain.value = e.target.value / 100;
+        });
+    }
     
     // Pause with ESC
     document.addEventListener('keydown', (e) => {
@@ -241,7 +330,11 @@ function setupEventListeners() {
 }
 
 function updatePlayButton() {
-    playBtn.disabled = !nextbotImageInput.files[0];
+    const playBtn = getElement('playBtn');
+    const nextbotImageInput = getElement('nextbotImage');
+    if (playBtn && nextbotImageInput) {
+        playBtn.disabled = !nextbotImageInput.files[0];
+    }
 }
 
 function setupAudioContext() {
@@ -255,7 +348,13 @@ function setupAudioContext() {
         musicGain.connect(masterGain);
         sfxGain.connect(masterGain);
         
-        masterGain.gain.value = document.getElementById('masterVolume').value / 100;
+        const masterVolumeSlider = getElement('masterVolume');
+        if (masterVolumeSlider) {
+            masterGain.gain.value = masterVolumeSlider.value / 100;
+        } else {
+            masterGain.gain.value = 0.5;
+        }
+        
         musicGain.gain.value = 0.7;
         sfxGain.gain.value = 0.8;
     } catch (e) {
@@ -264,9 +363,17 @@ function setupAudioContext() {
 }
 
 async function startGame() {
-    loadingDiv.style.display = 'block';
+    const loadingDiv = getElement('loading');
+    if (loadingDiv) loadingDiv.style.display = 'block';
     
     try {
+        const nextbotImageInput = getElement('nextbotImage');
+        if (!nextbotImageInput || !nextbotImageInput.files[0]) {
+            alert("Please upload a Nextbot image first!");
+            if (loadingDiv) loadingDiv.style.display = 'none';
+            return;
+        }
+        
         // Save current settings
         saveSettings();
         
@@ -275,11 +382,11 @@ async function startGame() {
         
         setTimeout(() => {
             initGame(nextbotURL);
-            loadingDiv.style.display = 'none';
+            if (loadingDiv) loadingDiv.style.display = 'none';
         }, 500);
         
     } catch (error) {
-        loadingDiv.style.display = 'none';
+        if (loadingDiv) loadingDiv.style.display = 'none';
         alert("Error loading game: " + error.message);
     }
 }
@@ -287,8 +394,11 @@ async function startGame() {
 async function loadAudioFiles() {
     if (!audioContext) return;
     
-    const bgMusicFile = bgMusicInput.files[0];
-    const nextbotSoundsFiles = nextbotSoundsInput.files;
+    const bgMusicInput = getElement('bgMusic');
+    const nextbotSoundsInput = getElement('nextbotSounds');
+    
+    const bgMusicFile = bgMusicInput ? bgMusicInput.files[0] : null;
+    const nextbotSoundsFiles = nextbotSoundsInput ? nextbotSoundsInput.files : [];
     
     // Stop any existing music
     if (bgMusic) {
@@ -343,30 +453,49 @@ function playRandomNextbotSound() {
 
 function toggleMute() {
     isMuted = !isMuted;
-    masterGain.gain.value = isMuted ? 0 : document.getElementById('masterVolume').value / 100;
-    document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
+    const masterVolumeSlider = getElement('masterVolume');
+    if (masterGain) {
+        masterGain.gain.value = isMuted ? 0 : (masterVolumeSlider ? masterVolumeSlider.value / 100 : 0.5);
+    }
+    
+    const muteBtn = getElement('muteBtn');
+    if (muteBtn) {
+        muteBtn.textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
+    }
 }
 
 function togglePause() {
     isPaused = !isPaused;
-    document.getElementById('pause-menu').style.display = isPaused ? 'flex' : 'none';
-    document.getElementById('hud').style.display = isPaused ? 'none' : 'block';
-    document.getElementById('crosshair').style.display = isPaused ? 'none' : 'block';
-    document.getElementById('audioControls').style.display = isPaused ? 'none' : 'block';
+    const pauseMenu = getElement('pause-menu');
+    const hud = getElement('hud');
+    const crosshair = getElement('crosshair');
+    const audioControls = getElement('audioControls');
+    
+    if (pauseMenu) pauseMenu.style.display = isPaused ? 'flex' : 'none';
+    if (hud) hud.style.display = isPaused ? 'none' : 'block';
+    if (crosshair) crosshair.style.display = isPaused ? 'none' : 'block';
+    if (audioControls) audioControls.style.display = isPaused ? 'none' : 'block';
     
     if (isPaused) {
         document.exitPointerLock();
-        document.getElementById('pause-time').textContent = Math.floor(gameTime);
-        document.getElementById('pause-distance').textContent = Math.floor(distanceTraveled);
+        const pauseTime = getElement('pause-time');
+        const pauseDistance = getElement('pause-distance');
+        if (pauseTime) pauseTime.textContent = Math.floor(gameTime);
+        if (pauseDistance) pauseDistance.textContent = Math.floor(distanceTraveled);
     }
 }
 
 function resumeGame() {
     isPaused = false;
-    document.getElementById('pause-menu').style.display = 'none';
-    document.getElementById('hud').style.display = 'block';
-    document.getElementById('crosshair').style.display = 'block';
-    document.getElementById('audioControls').style.display = 'block';
+    const pauseMenu = getElement('pause-menu');
+    const hud = getElement('hud');
+    const crosshair = getElement('crosshair');
+    const audioControls = getElement('audioControls');
+    
+    if (pauseMenu) pauseMenu.style.display = 'none';
+    if (hud) hud.style.display = 'block';
+    if (crosshair) crosshair.style.display = 'block';
+    if (audioControls) audioControls.style.display = 'block';
 }
 
 function showDeathScreen() {
@@ -374,21 +503,30 @@ function showDeathScreen() {
     document.exitPointerLock();
     
     // Update death screen stats
-    document.getElementById('death-time').textContent = Math.floor(gameTime);
-    document.getElementById('death-distance').textContent = Math.floor(distanceTraveled);
+    const deathTime = getElement('death-time');
+    const deathDistance = getElement('death-distance');
+    const deathOverlay = getElement('death-overlay');
+    const deathTitle = getElement('death-title');
+    const deathButtons = getElement('death-buttons');
+    const hud = getElement('hud');
+    const crosshair = getElement('crosshair');
+    const audioControls = getElement('audioControls');
+    
+    if (deathTime) deathTime.textContent = Math.floor(gameTime);
+    if (deathDistance) deathDistance.textContent = Math.floor(distanceTraveled);
     
     // Show red overlay
-    document.getElementById('death-overlay').style.display = 'flex';
-    document.getElementById('death-title').textContent = 'GAME OVER';
+    if (deathOverlay) deathOverlay.style.display = 'flex';
+    if (deathTitle) deathTitle.textContent = 'GAME OVER';
     
     // Hide other UI elements
-    document.getElementById('hud').style.display = 'none';
-    document.getElementById('crosshair').style.display = 'none';
-    document.getElementById('audioControls').style.display = 'none';
+    if (hud) hud.style.display = 'none';
+    if (crosshair) crosshair.style.display = 'none';
+    if (audioControls) audioControls.style.display = 'none';
     
     // Show buttons after 2 seconds
     setTimeout(() => {
-        document.getElementById('death-buttons').style.display = 'block';
+        if (deathButtons) deathButtons.style.display = 'block';
     }, 2000);
 }
 
@@ -412,9 +550,13 @@ function restartGame() {
     gameTime = 0;
     
     // Hide death screen
-    document.getElementById('death-overlay').style.display = 'none';
-    document.getElementById('death-buttons').style.display = 'none';
-    document.getElementById('pause-menu').style.display = 'none';
+    const deathOverlay = getElement('death-overlay');
+    const deathButtons = getElement('death-buttons');
+    const pauseMenu = getElement('pause-menu');
+    
+    if (deathOverlay) deathOverlay.style.display = 'none';
+    if (deathButtons) deathButtons.style.display = 'none';
+    if (pauseMenu) pauseMenu.style.display = 'none';
     
     // Restart with same settings
     startGame();
@@ -437,12 +579,19 @@ function returnToMenu() {
     isMouseLocked = false;
     
     // Show menu, hide game elements
-    document.getElementById('menu').style.display = 'flex';
-    document.getElementById('death-overlay').style.display = 'none';
-    document.getElementById('pause-menu').style.display = 'none';
-    document.getElementById('hud').style.display = 'none';
-    document.getElementById('crosshair').style.display = 'none';
-    document.getElementById('audioControls').style.display = 'none';
+    const menu = getElement('menu');
+    const deathOverlay = getElement('death-overlay');
+    const pauseMenu = getElement('pause-menu');
+    const hud = getElement('hud');
+    const crosshair = getElement('crosshair');
+    const audioControls = getElement('audioControls');
+    
+    if (menu) menu.style.display = 'flex';
+    if (deathOverlay) deathOverlay.style.display = 'none';
+    if (pauseMenu) pauseMenu.style.display = 'none';
+    if (hud) hud.style.display = 'none';
+    if (crosshair) crosshair.style.display = 'none';
+    if (audioControls) audioControls.style.display = 'none';
     
     // Clean up Three.js
     if (renderer) {
@@ -457,10 +606,15 @@ function returnToMenu() {
 
 // ========== GAME INITIALIZATION ==========
 function initGame(nextbotURL) {
-    document.getElementById("menu").style.display = "none";
-    document.getElementById("hud").style.display = "block";
-    document.getElementById("crosshair").style.display = "block";
-    document.getElementById("audioControls").style.display = "block";
+    const menu = getElement('menu');
+    const hud = getElement('hud');
+    const crosshair = getElement('crosshair');
+    const audioControls = getElement('audioControls');
+    
+    if (menu) menu.style.display = "none";
+    if (hud) hud.style.display = "block";
+    if (crosshair) crosshair.style.display = "block";
+    if (audioControls) audioControls.style.display = "block";
     
     // Reset game state
     isDead = false;
@@ -611,7 +765,10 @@ function setupMouseControls() {
 function onPointerLockChange() {
     const canvas = renderer.domElement;
     isMouseLocked = document.pointerLockElement === canvas;
-    document.getElementById("crosshair").style.display = isMouseLocked && !isPaused && !isDead ? "block" : "none";
+    const crosshair = getElement('crosshair');
+    if (crosshair) {
+        crosshair.style.display = isMouseLocked && !isPaused && !isDead ? "block" : "none";
+    }
 }
 
 function onMouseMove(event) {
@@ -659,7 +816,8 @@ function animate() {
     if (isPaused || isDead) return;
     
     gameTime += 1/60;
-    document.getElementById('time').textContent = Math.floor(gameTime);
+    const timeElement = getElement('time');
+    if (timeElement) timeElement.textContent = Math.floor(gameTime);
     
     if (isMouseLocked) {
         // Player movement
@@ -691,7 +849,8 @@ function animate() {
         
         // Update HUD speed display
         const currentSpeed = Math.round(velocity.length() * 200);
-        document.getElementById('speed').textContent = currentSpeed;
+        const speedElement = getElement('speed');
+        if (speedElement) speedElement.textContent = currentSpeed;
         
         // Player gravity and jumping
         playerVelocityY += gravity;
@@ -706,7 +865,8 @@ function animate() {
         // Distance tracking
         distanceTraveled += camera.position.distanceTo(lastPosition) * 0.5;
         lastPosition.copy(camera.position);
-        document.getElementById('distance').textContent = Math.floor(distanceTraveled);
+        const distanceElement = getElement('distance');
+        if (distanceElement) distanceElement.textContent = Math.floor(distanceTraveled);
         
         // Nextbot AI
         if (bot) {
@@ -748,16 +908,20 @@ function animate() {
             // Collision with nextbot
             if (distanceToPlayer < 8) {
                 playerHealth -= 2;
-                document.getElementById('health').textContent = Math.max(0, Math.floor(playerHealth));
+                const healthElement = getElement('health');
+                if (healthElement) healthElement.textContent = Math.max(0, Math.floor(playerHealth));
                 
                 const shake = (8 - distanceToPlayer) / 2;
                 camera.position.x += (Math.random() - 0.5) * shake;
                 camera.position.z += (Math.random() - 0.5) * shake;
                 
-                document.getElementById("hud").style.color = '#ff0000';
-                setTimeout(() => {
-                    document.getElementById("hud").style.color = 'white';
-                }, 100);
+                const hud = getElement('hud');
+                if (hud) {
+                    hud.style.color = '#ff0000';
+                    setTimeout(() => {
+                        if (hud) hud.style.color = 'white';
+                    }, 100);
+                }
                 
                 if (playerHealth <= 0 && !isDead) {
                     showDeathScreen();
