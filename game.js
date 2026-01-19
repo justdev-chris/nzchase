@@ -29,6 +29,7 @@ let isDead = false;
 let playerSpeedMultiplier = 1;
 let jumpHeightMultiplier = 1;
 let botSpeedMultiplier = 1;
+let mapScale = 1.0;
 
 // ========== AUDIO SYSTEM ==========
 let audioContext;
@@ -41,6 +42,12 @@ let nextbotSoundInterval;
 let savedNextbotImage = null;
 let savedBgMusic = null;
 let savedNextbotSounds = [];
+let saved3DMap = null;
+let autoFloorEnabled = true;
+
+// ========== LOADERS ==========
+let gltfLoader, objLoader, fbxLoader;
+let currentMapModel = null;
 
 // ========== UI ELEMENT GETTERS ==========
 function getElement(id) {
@@ -53,6 +60,11 @@ document.addEventListener('DOMContentLoaded', function() {
         alert("Three.js failed to load! Please refresh the page.");
         return;
     }
+    
+    // Initialize loaders
+    gltfLoader = new THREE.GLTFLoader();
+    objLoader = new THREE.OBJLoader();
+    fbxLoader = new THREE.FBXLoader();
     
     loadSavedSettings();
     setupEventListeners();
@@ -90,6 +102,17 @@ function loadSavedSettings() {
                 getElement('volumeDisplay').textContent = settings.masterVolume + '%';
             }
             
+            if (settings.mapScale !== undefined) {
+                getElement('mapScale').value = settings.mapScale;
+                mapScale = parseFloat(settings.mapScale);
+                getElement('mapScaleValue').textContent = settings.mapScale + 'x';
+            }
+            
+            if (settings.autoFloor !== undefined) {
+                getElement('autoFloor').checked = settings.autoFloor;
+                autoFloorEnabled = settings.autoFloor;
+            }
+            
             // Load file names for display
             if (settings.nextbotImageName) {
                 getElement('lastNextbotName').textContent = settings.nextbotImageName;
@@ -106,6 +129,11 @@ function loadSavedSettings() {
                 getElement('lastSoundsPreview').style.display = 'block';
             }
             
+            if (settings.map3dName) {
+                getElement('lastMapName').textContent = settings.map3dName;
+                getElement('lastMapPreview').style.display = 'block';
+            }
+            
         } catch (e) {
             console.error("Failed to load settings:", e);
         }
@@ -120,9 +148,12 @@ function saveSettings() {
         jumpHeight: getElement('jumpHeight').value,
         botSpeed: getElement('botSpeed').value,
         masterVolume: getElement('masterVolume').value,
+        mapScale: getElement('mapScale').value,
+        autoFloor: getElement('autoFloor').checked,
         nextbotImageName: savedNextbotImage ? savedNextbotImage.name : null,
         bgMusicName: savedBgMusic ? savedBgMusic.name : null,
-        nextbotSoundsCount: savedNextbotSounds.length
+        nextbotSoundsCount: savedNextbotSounds.length,
+        map3dName: saved3DMap ? saved3DMap.name : null
     };
     
     localStorage.setItem('nzchase_settings', JSON.stringify(settings));
@@ -133,26 +164,33 @@ function clearSavedSettings() {
     savedNextbotImage = null;
     savedBgMusic = null;
     savedNextbotSounds = [];
+    saved3DMap = null;
     
     // Reset UI
     getElement('lastNextbotPreview').style.display = 'none';
     getElement('lastBgMusicPreview').style.display = 'none';
     getElement('lastSoundsPreview').style.display = 'none';
+    getElement('lastMapPreview').style.display = 'none';
     
     // Reset sliders to defaults
     getElement('playerSpeed').value = 100;
     getElement('jumpHeight').value = 100;
     getElement('botSpeed').value = 100;
     getElement('masterVolume').value = 50;
+    getElement('mapScale').value = 1.0;
+    getElement('autoFloor').checked = true;
     
     playerSpeedMultiplier = 1;
     jumpHeightMultiplier = 1;
     botSpeedMultiplier = 1;
+    mapScale = 1.0;
+    autoFloorEnabled = true;
     
     getElement('playerSpeedValue').textContent = '100%';
     getElement('jumpHeightValue').textContent = '100%';
     getElement('botSpeedValue').textContent = '100%';
     getElement('volumeDisplay').textContent = '50%';
+    getElement('mapScaleValue').textContent = '1.0x';
     
     alert("Settings cleared!");
 }
@@ -176,6 +214,26 @@ function setupEventListeners() {
     // Nextbot sounds
     getElement('nextbotSounds').addEventListener('change', (e) => {
         savedNextbotSounds = Array.from(e.target.files);
+    });
+    
+    // 3D Map upload
+    getElement('map3d').addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            saved3DMap = e.target.files[0];
+        }
+    });
+    
+    // Map scale slider
+    getElement('mapScale').addEventListener('input', (e) => {
+        mapScale = parseFloat(e.target.value);
+        getElement('mapScaleValue').textContent = e.target.value + 'x';
+        saveSettings();
+    });
+    
+    // Auto floor checkbox
+    getElement('autoFloor').addEventListener('change', (e) => {
+        autoFloorEnabled = e.target.checked;
+        saveSettings();
     });
     
     // Player Speed Slider
@@ -403,6 +461,12 @@ function returnToMenu() {
     isPaused = false;
     isMouseLocked = false;
     
+    // Remove current map model if exists
+    if (currentMapModel && scene) {
+        scene.remove(currentMapModel);
+        currentMapModel = null;
+    }
+    
     // Show menu, hide game
     getElement('menu').style.display = 'flex';
     getElement('death-overlay').style.display = 'none';
@@ -470,7 +534,11 @@ function initGame(nextbotURL) {
     scene.add(directionalLight);
 
     // Create map
-    createMap();
+    if (saved3DMap) {
+        load3DMap();
+    } else {
+        createRandomMap();
+    }
 
     // Create Nextbot
     createNextbot(nextbotURL);
@@ -484,7 +552,82 @@ function initGame(nextbotURL) {
     }
 }
 
-function createMap() {
+function load3DMap() {
+    getElement('loading').textContent = 'Loading 3D Map...';
+    
+    const file = saved3DMap;
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    const objectURL = URL.createObjectURL(file);
+    
+    const onLoad = (model) => {
+        // Scale the model
+        model.scale.set(mapScale, mapScale, mapScale);
+        
+        // Center the model if needed
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        
+        model.position.sub(center);
+        
+        // Add auto floor if enabled
+        if (autoFloorEnabled) {
+            const floorSize = Math.max(size.x, size.z) * 1.5;
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(floorSize, floorSize),
+                new THREE.MeshLambertMaterial({ 
+                    color: 0x1a3c2e,
+                    side: THREE.DoubleSide
+                })
+            );
+            floor.rotation.x = Math.PI / 2;
+            floor.position.set(0, box.min.y - 0.1, 0);
+            scene.add(floor);
+        }
+        
+        // Add collision material to all meshes
+        model.traverse((child) => {
+            if (child.isMesh) {
+                child.material = new THREE.MeshLambertMaterial({ 
+                    color: 0x3a5c4e,
+                    transparent: true,
+                    opacity: 0.8
+                });
+            }
+        });
+        
+        scene.add(model);
+        currentMapModel = model;
+        
+        console.log("3D Map loaded successfully:", file.name);
+        getElement('loading').textContent = 'Loading...';
+    };
+    
+    const onError = (error) => {
+        console.error("Error loading 3D map:", error);
+        alert("Failed to load 3D map. Using random map instead.");
+        createRandomMap();
+        getElement('loading').textContent = 'Loading...';
+    };
+    
+    switch(fileExtension) {
+        case 'gltf':
+        case 'glb':
+            gltfLoader.load(objectURL, (gltf) => onLoad(gltf.scene), undefined, onError);
+            break;
+        case 'obj':
+            objLoader.load(objectURL, onLoad, undefined, onError);
+            break;
+        case 'fbx':
+            fbxLoader.load(objectURL, onLoad, undefined, onError);
+            break;
+        default:
+            alert("Unsupported 3D format. Using random map.");
+            createRandomMap();
+    }
+}
+
+function createRandomMap() {
     const size = 400;
     const halfSize = size / 2;
     
@@ -743,12 +886,14 @@ function animate() {
             }
         }
         
-        // Keep in bounds
-        const bounds = 180;
-        if (camera.position.x > bounds) camera.position.x = bounds;
-        if (camera.position.x < -bounds) camera.position.x = -bounds;
-        if (camera.position.z > bounds) camera.position.z = bounds;
-        if (camera.position.z < -bounds) camera.position.z = -bounds;
+        // Keep in bounds (for random map only)
+        if (!saved3DMap) {
+            const bounds = 180;
+            if (camera.position.x > bounds) camera.position.x = bounds;
+            if (camera.position.x < -bounds) camera.position.x = -bounds;
+            if (camera.position.z > bounds) camera.position.z = bounds;
+            if (camera.position.z < -bounds) camera.position.z = -bounds;
+        }
     }
     
     if (renderer && scene && camera) {
