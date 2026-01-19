@@ -29,7 +29,7 @@ let isDead = false;
 let playerSpeedMultiplier = 1;
 let jumpHeightMultiplier = 1;
 let botSpeedMultiplier = 1;
-let mapScale = 1.0;
+let mapScale = 10.0; // Increased default to 10x
 
 // ========== AUDIO SYSTEM ==========
 let audioContext;
@@ -45,9 +45,10 @@ let savedNextbotSounds = [];
 let saved3DMap = null;
 let autoFloorEnabled = true;
 
-// ========== LOADERS ==========
-let gltfLoader, objLoader, fbxLoader;
+// ========== COLLISION SYSTEM ==========
 let currentMapModel = null;
+let mapColliders = [];
+let mapBounds = null;
 
 // ========== UI ELEMENT GETTERS ==========
 function getElement(id) {
@@ -61,11 +62,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Initialize loaders
-    gltfLoader = new THREE.GLTFLoader();
-    objLoader = new THREE.OBJLoader();
-    fbxLoader = new THREE.FBXLoader();
-    
     loadSavedSettings();
     setupEventListeners();
     setupAudioContext();
@@ -78,7 +74,6 @@ function loadSavedSettings() {
         try {
             const settings = JSON.parse(savedSettings);
             
-            // Load slider values
             if (settings.playerSpeed !== undefined) {
                 getElement('playerSpeed').value = settings.playerSpeed;
                 playerSpeedMultiplier = settings.playerSpeed / 100;
@@ -113,7 +108,6 @@ function loadSavedSettings() {
                 autoFloorEnabled = settings.autoFloor;
             }
             
-            // Load file names for display
             if (settings.nextbotImageName) {
                 getElement('lastNextbotName').textContent = settings.nextbotImageName;
                 getElement('lastNextbotPreview').style.display = 'block';
@@ -166,37 +160,34 @@ function clearSavedSettings() {
     savedNextbotSounds = [];
     saved3DMap = null;
     
-    // Reset UI
     getElement('lastNextbotPreview').style.display = 'none';
     getElement('lastBgMusicPreview').style.display = 'none';
     getElement('lastSoundsPreview').style.display = 'none';
     getElement('lastMapPreview').style.display = 'none';
     
-    // Reset sliders to defaults
     getElement('playerSpeed').value = 100;
     getElement('jumpHeight').value = 100;
     getElement('botSpeed').value = 100;
     getElement('masterVolume').value = 50;
-    getElement('mapScale').value = 1.0;
+    getElement('mapScale').value = 10.0; // Updated default
     getElement('autoFloor').checked = true;
     
     playerSpeedMultiplier = 1;
     jumpHeightMultiplier = 1;
     botSpeedMultiplier = 1;
-    mapScale = 1.0;
+    mapScale = 10.0; // Updated default
     autoFloorEnabled = true;
     
     getElement('playerSpeedValue').textContent = '100%';
     getElement('jumpHeightValue').textContent = '100%';
     getElement('botSpeedValue').textContent = '100%';
     getElement('volumeDisplay').textContent = '50%';
-    getElement('mapScaleValue').textContent = '1.0x';
+    getElement('mapScaleValue').textContent = '10.0x'; // Updated display
     
     alert("Settings cleared!");
 }
 
 function setupEventListeners() {
-    // Nextbot image upload
     getElement('nextbotImage').addEventListener('change', (e) => {
         if (e.target.files[0]) {
             savedNextbotImage = e.target.files[0];
@@ -204,60 +195,52 @@ function setupEventListeners() {
         updatePlayButton();
     });
     
-    // Background music
     getElement('bgMusic').addEventListener('change', (e) => {
         if (e.target.files[0]) {
             savedBgMusic = e.target.files[0];
         }
     });
     
-    // Nextbot sounds
     getElement('nextbotSounds').addEventListener('change', (e) => {
         savedNextbotSounds = Array.from(e.target.files);
     });
     
-    // 3D Map upload
     getElement('map3d').addEventListener('change', (e) => {
         if (e.target.files[0]) {
             saved3DMap = e.target.files[0];
         }
     });
     
-    // Map scale slider
+    // Map scale slider now goes up to 20x
     getElement('mapScale').addEventListener('input', (e) => {
         mapScale = parseFloat(e.target.value);
         getElement('mapScaleValue').textContent = e.target.value + 'x';
         saveSettings();
     });
     
-    // Auto floor checkbox
     getElement('autoFloor').addEventListener('change', (e) => {
         autoFloorEnabled = e.target.checked;
         saveSettings();
     });
     
-    // Player Speed Slider
     getElement('playerSpeed').addEventListener('input', (e) => {
         playerSpeedMultiplier = e.target.value / 100;
         getElement('playerSpeedValue').textContent = e.target.value + '%';
         saveSettings();
     });
     
-    // Jump Height Slider
     getElement('jumpHeight').addEventListener('input', (e) => {
         jumpHeightMultiplier = e.target.value / 100;
         getElement('jumpHeightValue').textContent = e.target.value + '%';
         saveSettings();
     });
     
-    // Bot Speed Slider
     getElement('botSpeed').addEventListener('input', (e) => {
         botSpeedMultiplier = e.target.value / 100;
         getElement('botSpeedValue').textContent = e.target.value + '%';
         saveSettings();
     });
     
-    // Master Volume
     getElement('masterVolume').addEventListener('input', (e) => {
         const vol = e.target.value / 100;
         getElement('volumeDisplay').textContent = e.target.value + '%';
@@ -265,20 +248,12 @@ function setupEventListeners() {
         saveSettings();
     });
     
-    // Clear memory button
     getElement('clearMemoryBtn').addEventListener('click', clearSavedSettings);
-    
-    // Play button
     getElement('playBtn').addEventListener('click', startGame);
-    
-    // Pause menu buttons
     getElement('resumeBtn').addEventListener('click', resumeGame);
     getElement('pauseQuitBtn').addEventListener('click', returnToMenu);
-    
-    // Death screen button
     getElement('menuBtn').addEventListener('click', returnToMenu);
     
-    // Audio controls
     getElement('muteBtn').addEventListener('click', toggleMute);
     getElement('musicVolume').addEventListener('input', (e) => {
         if (musicGain) musicGain.gain.value = e.target.value / 100;
@@ -287,7 +262,6 @@ function setupEventListeners() {
         if (sfxGain) sfxGain.gain.value = e.target.value / 100;
     });
     
-    // Pause with ESC
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Escape' && isMouseLocked && !isDead) {
             togglePause();
@@ -322,7 +296,6 @@ async function startGame() {
     getElement('loading').style.display = 'block';
     
     try {
-        // Save settings
         saveSettings();
         
         const nextbotURL = URL.createObjectURL(getElement('nextbotImage').files[0]);
@@ -345,12 +318,10 @@ async function loadAudioFiles() {
     const bgMusicFile = getElement('bgMusic').files[0];
     const nextbotSoundsFiles = getElement('nextbotSounds').files;
     
-    // Stop any existing music
     if (bgMusic) {
         bgMusic.stop();
     }
     
-    // Load background music
     if (bgMusicFile) {
         bgMusic = await loadAudioFile(bgMusicFile, musicGain);
         if (bgMusic) {
@@ -359,10 +330,8 @@ async function loadAudioFiles() {
         }
     }
     
-    // Clear existing sounds
     nextbotAudio = [];
     
-    // Load nextbot sounds
     for (let i = 0; i < nextbotSoundsFiles.length; i++) {
         const sound = await loadAudioFile(nextbotSoundsFiles[i], sfxGain);
         if (sound) nextbotAudio.push(sound);
@@ -426,65 +395,23 @@ function showDeathScreen() {
     isDead = true;
     document.exitPointerLock();
     
-    // Update stats
     getElement('death-time').textContent = Math.floor(gameTime);
     getElement('death-distance').textContent = Math.floor(distanceTraveled);
     
-    // Show red overlay
     getElement('death-overlay').style.display = 'flex';
     getElement('death-title').textContent = 'GAME OVER';
     
-    // Hide other UI
     getElement('hud').style.display = 'none';
     getElement('crosshair').style.display = 'none';
     getElement('audioControls').style.display = 'none';
     
-    // Show button after 2 seconds
     setTimeout(() => {
         getElement('death-buttons').style.display = 'flex';
     }, 2000);
 }
 
 function returnToMenu() {
-    // Clear intervals
-    if (nextbotSoundInterval) {
-        clearInterval(nextbotSoundInterval);
-    }
-    
-    // Stop music
-    if (bgMusic) {
-        bgMusic.stop();
-    }
-    
-    // Reset game state
-    isDead = false;
-    isPaused = false;
-    isMouseLocked = false;
-    
-    // Remove current map model if exists
-    if (currentMapModel && scene) {
-        scene.remove(currentMapModel);
-        currentMapModel = null;
-    }
-    
-    // Show menu, hide game
-    getElement('menu').style.display = 'flex';
-    getElement('death-overlay').style.display = 'none';
-    getElement('pause-menu').style.display = 'none';
-    getElement('hud').style.display = 'none';
-    getElement('crosshair').style.display = 'none';
-    getElement('audioControls').style.display = 'none';
-    getElement('death-buttons').style.display = 'none';
-    
-    // Clean up Three.js
-    if (renderer) {
-        document.body.removeChild(renderer.domElement);
-        renderer = null;
-    }
-    
-    scene = null;
-    camera = null;
-    bot = null;
+    location.reload();
 }
 
 // ========== GAME INITIALIZATION ==========
@@ -494,59 +421,55 @@ function initGame(nextbotURL) {
     getElement("crosshair").style.display = "block";
     getElement("audioControls").style.display = "block";
     
-    // Reset game state
     isDead = false;
     playerHealth = 100;
     distanceTraveled = 0;
     gameTime = 0;
+    mapColliders = [];
+    mapBounds = null;
     
-    // Apply slider values
     basePlayerSpeed = 0.35 * playerSpeedMultiplier;
     maxSpeed = basePlayerSpeed;
     baseBotSpeed = 0.3 * botSpeedMultiplier;
     
-    // Create scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x001122);
     scene.fog = new THREE.Fog(0x001122, 20, 200);
 
-    // Create camera
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, floorY, 5);
+    camera.position.set(0, floorY + 2, 5);
     camera.rotation.x = 0;
     lastPosition.copy(camera.position);
 
-    // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
-    // Setup mouse controls
     setupMouseControls();
 
-    // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     directionalLight.position.set(100, 300, 100);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
 
-    // Create map
     if (saved3DMap) {
         load3DMap();
     } else {
         createRandomMap();
     }
 
-    // Create Nextbot
     createNextbot(nextbotURL);
 
-    // Start game loop
     animate();
     
-    // Start nextbot sound interval
     if (nextbotAudio.length > 0) {
         nextbotSoundInterval = setInterval(playRandomNextbotSound, 5000 + Math.random() * 10000);
     }
@@ -560,15 +483,35 @@ function load3DMap() {
     const objectURL = URL.createObjectURL(file);
     
     const onLoad = (model) => {
-        // Scale the model
+        // Apply the user's scale setting (now up to 20x!)
         model.scale.set(mapScale, mapScale, mapScale);
         
-        // Center the model if needed
+        // Get the bounds of the model after scaling
         const box = new THREE.Box3().setFromObject(model);
+        mapBounds = box;
+        
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         
+        // Center the model
         model.position.sub(center);
+        
+        console.log("Map loaded - Original size:", size);
+        console.log("Scale applied:", mapScale + "x");
+        console.log("Final map size:", size);
+        
+        // Find a safe spawn position INSIDE the map bounds
+        let safeSpawnPosition = findSafeSpawnPosition(box, size);
+        camera.position.set(safeSpawnPosition.x, floorY + 2, safeSpawnPosition.z);
+        lastPosition.copy(camera.position);
+        
+        console.log("Player spawned at:", camera.position);
+        console.log("Map bounds:", box.min, "to", box.max);
+        
+        // Warn if map is very small
+        if (size.x < 50 || size.z < 50) {
+            console.warn("Map is very small! Try increasing the scale to 10x-20x.");
+        }
         
         // Add auto floor if enabled
         if (autoFloorEnabled) {
@@ -582,24 +525,43 @@ function load3DMap() {
             );
             floor.rotation.x = Math.PI / 2;
             floor.position.set(0, box.min.y - 0.1, 0);
+            floor.receiveShadow = true;
             scene.add(floor);
         }
         
-        // Add collision material to all meshes
+        // Process all meshes for collisions and materials
         model.traverse((child) => {
             if (child.isMesh) {
-                child.material = new THREE.MeshLambertMaterial({ 
-                    color: 0x3a5c4e,
-                    transparent: true,
-                    opacity: 0.8
-                });
+                // Keep original material if it exists
+                if (!child.material) {
+                    child.material = new THREE.MeshLambertMaterial({ 
+                        color: 0x808080
+                    });
+                }
+                
+                // Enable shadows
+                child.castShadow = true;
+                child.receiveShadow = true;
+                
+                // Create collision box (already scaled)
+                child.geometry.computeBoundingBox();
+                const bbox = child.geometry.boundingBox.clone();
+                
+                // Apply world transformation
+                const worldMatrix = new THREE.Matrix4();
+                child.updateMatrixWorld();
+                worldMatrix.copy(child.matrixWorld);
+                bbox.applyMatrix4(worldMatrix);
+                
+                // Store for collision detection
+                mapColliders.push(bbox);
             }
         });
         
         scene.add(model);
         currentMapModel = model;
         
-        console.log("3D Map loaded successfully:", file.name);
+        console.log("Colliders created:", mapColliders.length);
         getElement('loading').textContent = 'Loading...';
     };
     
@@ -613,12 +575,15 @@ function load3DMap() {
     switch(fileExtension) {
         case 'gltf':
         case 'glb':
+            const gltfLoader = new THREE.GLTFLoader();
             gltfLoader.load(objectURL, (gltf) => onLoad(gltf.scene), undefined, onError);
             break;
         case 'obj':
+            const objLoader = new THREE.OBJLoader();
             objLoader.load(objectURL, onLoad, undefined, onError);
             break;
         case 'fbx':
+            const fbxLoader = new THREE.FBXLoader();
             fbxLoader.load(objectURL, onLoad, undefined, onError);
             break;
         default:
@@ -627,11 +592,96 @@ function load3DMap() {
     }
 }
 
+function findSafeSpawnPosition(box, size) {
+    // First try: center of the map
+    if (!isPositionBlocked(new THREE.Vector3(0, floorY + 2, 0))) {
+        console.log("Using center spawn");
+        return new THREE.Vector3(0, 0, 0);
+    }
+    
+    // Calculate safe spawn radius (half of smaller dimension, minus player radius)
+    const safeRadius = Math.min(Math.abs(size.x), Math.abs(size.z)) * 0.4 - 2;
+    
+    // Try positions in a circle around center
+    const positions = [];
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+        const x = Math.cos(angle) * safeRadius;
+        const z = Math.sin(angle) * safeRadius;
+        positions.push({ x, z });
+    }
+    
+    for (let pos of positions) {
+        const testPos = new THREE.Vector3(pos.x, floorY + 2, pos.z);
+        if (!isPositionBlocked(testPos)) {
+            console.log("Using radial spawn at angle");
+            return testPos;
+        }
+    }
+    
+    // Try grid search within bounds
+    const step = Math.max(size.x, size.z) / 10;
+    for (let x = box.min.x + step; x < box.max.x; x += step) {
+        for (let z = box.min.z + step; z < box.max.z; z += step) {
+            const testPos = new THREE.Vector3(x, floorY + 2, z);
+            if (!isPositionBlocked(testPos)) {
+                console.log("Using grid search spawn");
+                return testPos;
+            }
+        }
+    }
+    
+    // Last resort: spawn at the highest point in the map
+    console.warn("No safe spawn found! Using emergency spawn at highest point");
+    return new THREE.Vector3(0, box.max.y + 5, 0);
+}
+
+function isPositionBlocked(position) {
+    // Early exit if no colliders yet
+    if (mapColliders.length === 0) return false;
+    
+    const playerBox = new THREE.Box3(
+        new THREE.Vector3(position.x - 0.5, position.y - 1.8, position.z - 0.5),
+        new THREE.Vector3(position.x + 0.5, position.y + 0.2, position.z + 0.5)
+    );
+    
+    for (let collider of mapColliders) {
+        if (playerBox.intersectsBox(collider)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+function checkMapCollision(newPosition) {
+    if (mapColliders.length === 0) return false;
+    
+    const playerBox = new THREE.Box3(
+        new THREE.Vector3(newPosition.x - 0.4, newPosition.y - 0.8, newPosition.z - 0.4),
+        new THREE.Vector3(newPosition.x + 0.4, newPosition.y + 1.8, newPosition.z + 0.4)
+    );
+    
+    for (let i = 0; i < mapColliders.length; i++) {
+        if (playerBox.intersectsBox(mapColliders[i])) {
+            return true;
+        }
+    }
+    
+    // Also check if we're outside map bounds
+    if (mapBounds) {
+        if (newPosition.x < mapBounds.min.x + 1 || newPosition.x > mapBounds.max.x - 1 ||
+            newPosition.z < mapBounds.min.z + 1 || newPosition.z > mapBounds.max.z - 1) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 function createRandomMap() {
     const size = 400;
     const halfSize = size / 2;
     
-    // Floor
     const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(size, size, 40, 40),
         new THREE.MeshLambertMaterial({ 
@@ -641,9 +691,9 @@ function createRandomMap() {
     );
     floor.rotation.x = Math.PI / 2;
     floor.position.y = 0;
+    floor.receiveShadow = true;
     scene.add(floor);
 
-    // Walls
     const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x2a4c3e });
     const wallGeometry = new THREE.PlaneGeometry(size, 40);
     
@@ -658,10 +708,10 @@ function createRandomMap() {
         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
         wall.position.set(...wallData.pos);
         wall.rotation.set(...wallData.rot);
+        wall.receiveShadow = true;
         scene.add(wall);
     });
 
-    // Obstacles
     const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5c4e });
     for (let i = 0; i < 20; i++) {
         const height = Math.random() * 15 + 5;
@@ -679,6 +729,8 @@ function createRandomMap() {
             height / 2,
             Math.random() * (maxPos * 2) - maxPos
         );
+        obstacle.castShadow = true;
+        obstacle.receiveShadow = true;
         scene.add(obstacle);
     }
 }
@@ -695,12 +747,14 @@ function createNextbot(imgURL) {
         });
         bot = new THREE.Mesh(botGeometry, botMaterial);
         bot.position.set(0, 4, -80);
+        bot.castShadow = true;
         scene.add(bot);
     }, undefined, function(error) {
         const botGeometry = new THREE.BoxGeometry(6, 6, 6);
         const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
         bot = new THREE.Mesh(botGeometry, botMaterial);
         bot.position.set(0, 3, -80);
+        bot.castShadow = true;
         scene.add(bot);
     });
 }
@@ -773,7 +827,6 @@ function animate() {
     getElement('time').textContent = Math.floor(gameTime);
     
     if (isMouseLocked) {
-        // Player movement
         const forward = new THREE.Vector3();
         const right = new THREE.Vector3();
         
@@ -783,45 +836,57 @@ function animate() {
         
         right.crossVectors(camera.up, forward).normalize();
         
-        // Apply friction
         velocity.multiplyScalar(friction);
         
-        // Add acceleration
         if (keys["w"]) velocity.add(forward.clone().multiplyScalar(acceleration));
         if (keys["s"]) velocity.add(forward.clone().multiplyScalar(-acceleration));
         if (keys["a"]) velocity.add(right.clone().multiplyScalar(acceleration));
         if (keys["d"]) velocity.add(right.clone().multiplyScalar(-acceleration));
         
-        // Cap speed
         if (velocity.length() > maxSpeed) {
             velocity.normalize().multiplyScalar(maxSpeed);
         }
         
-        // Move camera
-        camera.position.add(velocity);
+        const oldPosition = camera.position.clone();
         
-        // Update HUD
+        // Try X movement
+        const newPositionX = camera.position.clone();
+        newPositionX.x += velocity.x;
+        if (!checkMapCollision(newPositionX)) {
+            camera.position.x = newPositionX.x;
+        }
+        
+        // Try Z movement
+        const newPositionZ = camera.position.clone();
+        newPositionZ.z += velocity.z;
+        if (!checkMapCollision(newPositionZ)) {
+            camera.position.z = newPositionZ.z;
+        }
+        
         const currentSpeed = Math.round(velocity.length() * 200);
         getElement('speed').textContent = currentSpeed;
         
-        // Gravity and jumping
         playerVelocityY += gravity;
         camera.position.y += playerVelocityY;
         
-        if (camera.position.y <= floorY) {
+        const verticalCheckPos = camera.position.clone();
+        if (checkMapCollision(verticalCheckPos)) {
+            camera.position.y = oldPosition.y;
+            playerVelocityY = 0;
+            isOnGround = true;
+        } else if (camera.position.y <= floorY) {
             camera.position.y = floorY;
             playerVelocityY = 0;
             isOnGround = true;
+        } else {
+            isOnGround = false;
         }
         
-        // Distance tracking
         distanceTraveled += camera.position.distanceTo(lastPosition) * 0.5;
         lastPosition.copy(camera.position);
         getElement('distance').textContent = Math.floor(distanceTraveled);
         
-        // Nextbot AI
         if (bot) {
-            // Bot gravity
             botVelocityY += gravity;
             bot.position.y += botVelocityY;
             
@@ -830,7 +895,6 @@ function animate() {
                 botVelocityY = 0;
             }
             
-            // Bot movement
             const dir = new THREE.Vector3();
             dir.subVectors(camera.position, bot.position).normalize();
             
@@ -856,7 +920,6 @@ function animate() {
                 botVelocityY = 0.6;
             }
             
-            // Collision with nextbot
             if (distanceToPlayer < 8) {
                 playerHealth -= 2;
                 getElement('health').textContent = Math.max(0, Math.floor(playerHealth));
@@ -886,7 +949,7 @@ function animate() {
             }
         }
         
-        // Keep in bounds (for random map only)
+        // Keep in bounds for random maps
         if (!saved3DMap) {
             const bounds = 180;
             if (camera.position.x > bounds) camera.position.x = bounds;
