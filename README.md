@@ -1,0 +1,3 @@
+# NZChase
+a *simple*, nextbot runner game.
+- custom image needed for nextbot...
