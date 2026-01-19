@@ -89,9 +89,9 @@ let isOnGround = true;
 let playerHealth = 100;
 let playerSpeed = 0;
 let maxSpeed = 0.35;
-let acceleration = 0.15;
+let acceleration = 0.40;
 let friction = 0.9;
-let botSpeed = 0.18; // Even FASTER
+let botSpeed = 0.30; // Even FASTER
 let mouseSensitivity = 0.0015; // Smoother mouse
 let pitch = 0;
 let yaw = 0;
@@ -208,7 +208,7 @@ function init(imgURL) {
       transparent: true,
       side: THREE.DoubleSide,
       emissive: 0xff0000,
-      emissiveIntensity: 0.7
+      emissiveIntensity: 0.1
     });
     bot = new THREE.Mesh(botGeometry, botMaterial);
     bot.position.set(0, 4, -80);
@@ -226,7 +226,7 @@ function init(imgURL) {
     const botMaterial = new THREE.MeshLambertMaterial({ 
       color: 0xff0000, 
       emissive: 0xff0000, 
-      emissiveIntensity: 1.0
+      emissiveIntensity: 0.1
     });
     bot = new THREE.Mesh(botGeometry, botMaterial);
     bot.position.set(0, 3, -80);
@@ -312,8 +312,8 @@ window.onkeyup = e => {
   keys[key] = false;
   
   if (key === 'shift') {
-    maxSpeed = 0.35;
-    acceleration = 0.15;
+    maxSpeed = 0.50;
+    acceleration = 0.46;
   }
   
   if (key === 'control') {
