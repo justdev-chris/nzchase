@@ -2,61 +2,80 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Nextbot Runner - FAST</title>
+<title>NZChase</title>
 <style>
-  body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+  body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial', sans-serif; }
   #menu {
     position: absolute;
     inset: 0;
-    background: #111;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
     color: white;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 15px;
+    gap: 20px;
     z-index: 100;
   }
   button {
-    padding: 10px 20px;
+    padding: 12px 30px;
     font-size: 18px;
     cursor: pointer;
+    background: #ff3366;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    transition: transform 0.2s;
+  }
+  button:hover {
+    transform: scale(1.05);
+    background: #ff5588;
   }
   #hud {
     position: absolute;
     top: 20px;
     left: 20px;
     color: white;
-    font-size: 20px;
+    font-size: 22px;
     z-index: 10;
     display: none;
-    background: rgba(0,0,0,0.5);
-    padding: 10px;
-    border-radius: 5px;
+    background: rgba(0,0,0,0.7);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: bold;
+    text-shadow: 0 0 5px black;
   }
   #crosshair {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: white;
-    font-size: 24px;
+    color: #ff3366;
+    font-size: 30px;
+    font-weight: bold;
     display: none;
     pointer-events: none;
+    text-shadow: 0 0 10px rgba(255,51,102,0.5);
+  }
+  .warning {
+    color: #ff5555;
+    font-size: 14px;
+    margin-top: -10px;
   }
 </style>
 </head>
 <body>
 
 <div id="menu">
-  <h1>Nextbot Runner - FAST MODE</h1>
-  <input type="file" id="imgInput" accept="image/*">
-  <button id="playBtn">Play</button>
-  <p>WASD to move • Mouse to look • SPACE to jump</p>
-  <p style="color: #ff5555;">⚠️ NEXTBOT IS FAST AF ⚠️</p>
+  <h1 style="font-size: 48px; margin-bottom: 10px; color: #ff3366;">NZChase</h1>
+  <p style="font-size: 20px; margin-bottom: 30px;">Upload your nightmare fuel</p>
+  <input type="file" id="imgInput" accept="image/*" style="font-size: 16px;">
+  <button id="playBtn">START RUNNING</button>
+  <p style="font-size: 18px;">WASD to move • Mouse to look • SPACE to JUMP HIGH</p>
+  <p class="warning">⚠️ epilepsy warning ⚠️</p>
 </div>
 
-<div id="hud">Health: <span id="health">100</span> | Distance: <span id="distance">0</span>m</div>
+<div id="hud">❤️ <span id="health">100</span> | 🏃 <span id="distance">0</span>m | ⚡ <span id="speed">0</span></div>
 <div id="crosshair">+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -64,27 +83,30 @@
 let scene, camera, renderer;
 let bot;
 let velocityY = 0;
-const gravity = -0.05; // Stronger gravity
-const floorY = 1.6;
+const gravity = -0.03; // Softer gravity for floaty jumps
+const floorY = 2.0; // Higher starting position
 let isOnGround = true;
 let playerHealth = 100;
-let playerSpeed = 0.25; // Faster player movement
-let botSpeed = 0.12; // MUCH FASTER bot (was 0.03)
-let mouseSensitivity = 0.002;
+let playerSpeed = 0;
+let maxSpeed = 0.35;
+let acceleration = 0.15;
+let friction = 0.9;
+let botSpeed = 0.18; // Even FASTER
+let mouseSensitivity = 0.0015; // Smoother mouse
 let pitch = 0;
 let yaw = 0;
 let distanceTraveled = 0;
 let lastPosition = new THREE.Vector3();
+let velocity = new THREE.Vector3(); // For smooth movement
 
-// Mouse control variables
+// Mouse control
 let isMouseLocked = false;
-let isPointerLockSupported = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
 
 window.onload = function() {
   document.getElementById("playBtn").onclick = () => {
     const file = document.getElementById("imgInput").files[0];
     if (!file) {
-      alert("Upload a nextbot image first");
+      alert("Upload a nextbot image first!");
       return;
     }
 
@@ -98,118 +120,126 @@ window.onload = function() {
 function init(imgURL) {
   console.log("Initializing game...");
   
-  // 1. Create scene
+  // Create scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87CEEB);
-  scene.fog = new THREE.Fog(0x87CEEB, 10, 150);
+  scene.background = new THREE.Color(0x001122);
+  scene.fog = new THREE.Fog(0x001122, 20, 200);
 
-  // 2. Create camera
-  camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000); // Wider FOV
+  // Create camera
+  camera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, floorY, 5);
   lastPosition.copy(camera.position);
 
-  // 3. Create renderer
+  // Create renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
   document.body.appendChild(renderer.domElement);
 
-  // 4. Setup mouse controls
+  // Setup mouse controls
   setupMouseControls();
 
-  // 5. Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
   
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-  directionalLight.position.set(100, 200, 100);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  directionalLight.position.set(100, 300, 100);
+  directionalLight.castShadow = true;
   scene.add(directionalLight);
 
-  // 6. Floor
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(300, 300),
-    new THREE.MeshLambertMaterial({ 
-      color: 0x2E8B57,
-      side: THREE.DoubleSide
-    })
-  );
+  // Floor with grid pattern
+  const floorGeometry = new THREE.PlaneGeometry(400, 400, 40, 40);
+  const floorMaterial = new THREE.MeshLambertMaterial({ 
+    color: 0x1a3c2e,
+    wireframe: false,
+    side: THREE.DoubleSide
+  });
+  const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = Math.PI / 2;
   floor.position.y = 0;
   scene.add(floor);
 
-  // 7. Walls (farther away for more space)
-  const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+  // Walls
+  const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x2a4c3e });
+  const wallGeometry = new THREE.PlaneGeometry(400, 40);
   
   const walls = [
-    { pos: [0, 15, -150], rot: [0, 0, 0] }, // Back
-    { pos: [0, 15, 150], rot: [0, Math.PI, 0] }, // Front
-    { pos: [-150, 15, 0], rot: [0, Math.PI/2, 0] }, // Left
-    { pos: [150, 15, 0], rot: [0, -Math.PI/2, 0] }  // Right
+    { pos: [0, 20, -200], rot: [0, 0, 0] },
+    { pos: [0, 20, 200], rot: [0, Math.PI, 0] },
+    { pos: [-200, 20, 0], rot: [0, Math.PI/2, 0] },
+    { pos: [200, 20, 0], rot: [0, -Math.PI/2, 0] }
   ];
   
   walls.forEach(wallData => {
-    const wall = new THREE.Mesh(
-      new THREE.PlaneGeometry(300, 30),
-      wallMaterial
-    );
+    const wall = new THREE.Mesh(wallGeometry, wallMaterial);
     wall.position.set(...wallData.pos);
     wall.rotation.set(...wallData.rot);
     scene.add(wall);
   });
 
-  // 8. Obstacles
-  const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 });
-  for (let i = 0; i < 20; i++) {
+  // Obstacles
+  const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5c4e });
+  for (let i = 0; i < 25; i++) {
+    const height = Math.random() * 15 + 5;
     const obstacle = new THREE.Mesh(
       new THREE.BoxGeometry(
-        Math.random() * 8 + 4, 
         Math.random() * 10 + 5, 
-        Math.random() * 8 + 4
+        height, 
+        Math.random() * 10 + 5
       ),
       obstacleMaterial
     );
     obstacle.position.set(
-      Math.random() * 250 - 125,
-      obstacle.geometry.parameters.height / 2,
-      Math.random() * 250 - 125
+      Math.random() * 350 - 175,
+      height / 2,
+      Math.random() * 350 - 175
     );
     scene.add(obstacle);
   }
 
-  // 9. Nextbot (FAST AF)
+  // Nextbot - THE NIGHTMARE
   const texLoader = new THREE.TextureLoader();
   texLoader.load(imgURL, function(texture) {
     const aspect = texture.image.width / texture.image.height;
-    const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
+    const botGeometry = new THREE.PlaneGeometry(8 * aspect, 8);
     const botMaterial = new THREE.MeshLambertMaterial({ 
       map: texture, 
       transparent: true,
       side: THREE.DoubleSide,
-      emissive: 0x550000, // Red glow for scary effect
-      emissiveIntensity: 0.3
+      emissive: 0xff0000,
+      emissiveIntensity: 0.7
     });
     bot = new THREE.Mesh(botGeometry, botMaterial);
-    bot.position.set(0, 3, -50);
+    bot.position.set(0, 4, -80);
     scene.add(bot);
+    
+    // Add pulsing effect
+    setInterval(() => {
+      if (bot && bot.material) {
+        bot.material.emissiveIntensity = 0.5 + Math.random() * 0.5;
+      }
+    }, 300);
   }, undefined, function(error) {
-    console.error("Failed to load image, using placeholder");
-    const placeholder = new THREE.Mesh(
-      new THREE.BoxGeometry(5, 5, 5),
-      new THREE.MeshLambertMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.5 })
-    );
-    bot = placeholder;
-    bot.position.set(0, 2.5, -50);
+    console.error("Failed to load image, using SCARY placeholder");
+    const botGeometry = new THREE.BoxGeometry(6, 6, 6);
+    const botMaterial = new THREE.MeshLambertMaterial({ 
+      color: 0xff0000, 
+      emissive: 0xff0000, 
+      emissiveIntensity: 1.0
+    });
+    bot = new THREE.Mesh(botGeometry, botMaterial);
+    bot.position.set(0, 3, -80);
     scene.add(bot);
   });
 
-  // 10. Start animation
+  // Start animation
   animate();
 }
 
 function setupMouseControls() {
   const canvas = renderer.domElement;
   
-  // Pointer lock setup
   canvas.addEventListener('click', () => {
     if (!isMouseLocked) {
       canvas.requestPointerLock = canvas.requestPointerLock || 
@@ -219,12 +249,9 @@ function setupMouseControls() {
     }
   });
 
-  // Pointer lock change events
   document.addEventListener('pointerlockchange', onPointerLockChange);
   document.addEventListener('mozpointerlockchange', onPointerLockChange);
   document.addEventListener('webkitpointerlockchange', onPointerLockChange);
-
-  // Mouse movement
   document.addEventListener('mousemove', onMouseMove);
 }
 
@@ -240,19 +267,18 @@ function onPointerLockChange() {
 function onMouseMove(event) {
   if (!isMouseLocked) return;
   
-  // Get mouse movement
   const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
   const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
   
-  // Update camera rotation
   yaw -= movementX * mouseSensitivity;
   pitch -= movementY * mouseSensitivity;
   
-  // Clamp pitch to prevent flipping
-  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+  // Clamp pitch
+  pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
   
-  // Update camera rotation
-  camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  // SMOOTH camera rotation with lerp
+  camera.rotation.x += (pitch - camera.rotation.x) * 0.2;
+  camera.rotation.y += (yaw - camera.rotation.y) * 0.2;
 }
 
 const keys = {};
@@ -260,15 +286,24 @@ window.onkeydown = e => {
   const key = e.key.toLowerCase();
   keys[key] = true;
   
-  // JUMP HIGHER (was 0.15, now 0.35)
+  // SUPER HIGH JUMP - PRESS SPACE
   if (e.code === 'Space' && isOnGround) {
-    velocityY = 0.35; // MUCH HIGHER JUMP
+    velocityY = 0.8; // ⚡⚡⚡ SUPER HIGH JUMP NOW ⚡⚡⚡
     isOnGround = false;
+    // Jump sound effect simulation
+    console.log("BOING! 🦘");
   }
   
-  // Sprint (SHIFT)
+  // Sprint
   if (key === 'shift') {
-    playerSpeed = 0.4;
+    maxSpeed = 0.5;
+    acceleration = 0.2;
+  }
+  
+  // Crouch (makes you lower/slower)
+  if (key === 'control') {
+    camera.position.y = floorY - 0.8;
+    maxSpeed = 0.2;
   }
 };
 
@@ -277,7 +312,12 @@ window.onkeyup = e => {
   keys[key] = false;
   
   if (key === 'shift') {
-    playerSpeed = 0.25;
+    maxSpeed = 0.35;
+    acceleration = 0.15;
+  }
+  
+  if (key === 'control') {
+    camera.position.y = floorY;
   }
 };
 
@@ -285,8 +325,7 @@ function animate() {
   requestAnimationFrame(animate);
 
   if (isMouseLocked) {
-    // Calculate movement direction based on camera rotation
-    const moveDirection = new THREE.Vector3();
+    // Calculate movement vectors
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
     
@@ -296,16 +335,32 @@ function animate() {
     
     right.crossVectors(camera.up, forward).normalize();
     
-    // Store old position
-    const oldPosition = camera.position.clone();
+    // Reset velocity
+    velocity.x = 0;
+    velocity.z = 0;
     
-    // Movement with camera-relative controls
-    if (keys["w"]) camera.position.add(forward.clone().multiplyScalar(playerSpeed));
-    if (keys["s"]) camera.position.add(forward.clone().multiplyScalar(-playerSpeed));
-    if (keys["a"]) camera.position.add(right.clone().multiplyScalar(playerSpeed));
-    if (keys["d"]) camera.position.add(right.clone().multiplyScalar(-playerSpeed));
+    // Apply input with acceleration
+    if (keys["w"]) velocity.add(forward.clone().multiplyScalar(acceleration));
+    if (keys["s"]) velocity.add(forward.clone().multiplyScalar(-acceleration));
+    if (keys["a"]) velocity.add(right.clone().multiplyScalar(acceleration));
+    if (keys["d"]) velocity.add(right.clone().multiplyScalar(-acceleration));
     
-    // Gravity and jumping
+    // Apply friction for smooth stopping
+    velocity.multiplyScalar(friction);
+    
+    // Limit speed
+    if (velocity.length() > maxSpeed) {
+      velocity.normalize().multiplyScalar(maxSpeed);
+    }
+    
+    // Update position
+    camera.position.add(velocity);
+    
+    // Update speed display
+    const currentSpeed = Math.round(velocity.length() * 100);
+    document.getElementById("speed").textContent = currentSpeed;
+    
+    // Gravity and SUPER HIGH jumping
     velocityY += gravity;
     camera.position.y += velocityY;
     
@@ -315,59 +370,82 @@ function animate() {
       isOnGround = true;
     }
     
-    // Calculate distance traveled
-    distanceTraveled += camera.position.distanceTo(lastPosition);
+    // Calculate distance
+    distanceTraveled += camera.position.distanceTo(lastPosition) * 0.5;
     lastPosition.copy(camera.position);
     document.getElementById("distance").textContent = Math.floor(distanceTraveled);
     
-    // Nextbot chase (FAST AF)
+    // NEXTBOT CHASE - FAST & SCARY
     if (bot) {
       const dir = new THREE.Vector3();
       dir.subVectors(camera.position, bot.position).normalize();
       
-      // Adaptive speed - gets faster as it gets closer
+      // Variable speed - faster when closer, can teleport
       const distanceToPlayer = bot.position.distanceTo(camera.position);
-      const adaptiveSpeed = Math.min(botSpeed * (100 / distanceToPlayer), 0.3); // Cap at 0.3
+      let currentBotSpeed = botSpeed;
       
-      bot.position.add(dir.multiplyScalar(adaptiveSpeed));
+      if (distanceToPlayer < 20) {
+        currentBotSpeed *= 2; // Double speed when close!
+      }
       
-      // Make bot always face player
-      bot.lookAt(camera.position);
+      // Random speed bursts
+      if (Math.random() < 0.02) {
+        currentBotSpeed *= 3;
+      }
       
-      // Check collision with bot (scary close)
-      if (distanceToPlayer < 4) {
-        playerHealth -= 1.5; // More damage when close
+      bot.position.add(dir.multiplyScalar(currentBotSpeed));
+      
+      // Make bot face player smoothly
+      const targetLook = camera.position.clone();
+      targetLook.y = bot.position.y;
+      bot.lookAt(targetLook);
+      
+      // SCARY CLOSE EFFECTS
+      if (distanceToPlayer < 8) {
+        playerHealth -= 2;
         document.getElementById('health').textContent = Math.max(0, Math.floor(playerHealth));
         
-        // Screen shake effect when bot is close
-        const shakeIntensity = Math.min(0.5, 4 / distanceToPlayer);
-        camera.position.x += (Math.random() - 0.5) * shakeIntensity;
-        camera.position.z += (Math.random() - 0.5) * shakeIntensity;
+        // Intense screen shake when super close
+        const shake = (8 - distanceToPlayer) / 2;
+        camera.position.x += (Math.random() - 0.5) * shake;
+        camera.position.y += (Math.random() - 0.5) * shake * 0.5;
+        camera.position.z += (Math.random() - 0.5) * shake;
+        
+        // Red flash on HUD
+        document.getElementById("hud").style.color = '#ff0000';
+        setTimeout(() => {
+          document.getElementById("hud").style.color = 'white';
+        }, 100);
         
         if (playerHealth <= 0) {
-          alert(`GAME OVER!\nNextbot caught you!\nDistance: ${Math.floor(distanceTraveled)}m`);
+          alert(`💀 YOU GOT CAUGHT! 💀\n\nDistance Run: ${Math.floor(distanceTraveled)} meters\nBot Speed: ${Math.round(currentBotSpeed * 100)}%\n\nBetter luck next time!`);
           location.reload();
         }
       }
       
-      // Make bot teleport if too far (scary mechanic)
-      if (distanceToPlayer > 100 && Math.random() < 0.005) {
+      // Teleport mechanic - SCARY RANDOM TELEPORT
+      if (distanceToPlayer > 60 && Math.random() < 0.008) {
         const angle = Math.random() * Math.PI * 2;
-        const distance = 30 + Math.random() * 20;
+        const teleportDistance = 15 + Math.random() * 25;
         bot.position.set(
-          camera.position.x + Math.cos(angle) * distance,
-          3,
-          camera.position.z + Math.sin(angle) * distance
+          camera.position.x + Math.cos(angle) * teleportDistance,
+          4,
+          camera.position.z + Math.sin(angle) * teleportDistance
         );
+      }
+      
+      // Bot can also JUMP to reach you!
+      if (Math.random() < 0.01 && bot.position.y < 5) {
+        bot.position.y += 2;
       }
     }
     
-    // Keep player in bounds
-    const maxDistance = 140;
-    if (camera.position.x > maxDistance) camera.position.x = maxDistance;
-    if (camera.position.x < -maxDistance) camera.position.x = -maxDistance;
-    if (camera.position.z > maxDistance) camera.position.z = maxDistance;
-    if (camera.position.z < -maxDistance) camera.position.z = -maxDistance;
+    // Keep in bounds
+    const bounds = 180;
+    if (camera.position.x > bounds) camera.position.x = bounds;
+    if (camera.position.x < -bounds) camera.position.x = -bounds;
+    if (camera.position.z > bounds) camera.position.z = bounds;
+    if (camera.position.z < -bounds) camera.position.z = -bounds;
   }
 
   if (renderer && scene && camera) {
