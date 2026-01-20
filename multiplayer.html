@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NZChase - Multiplayer</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Multiplayer Specific Styles */
+        #multiplayer-container {
+            position: absolute;
+            inset: 0;
+            background: #111;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        
+        .back-button:hover {
+            background: #444;
+        }
+        
+        .multiplayer-section {
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .room-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .room-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+        }
+        
+        .room-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .room-card h3 {
+            margin: 0 0 10px 0;
+            color: #ff3366;
+        }
+        
+        .room-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        .player-count {
+            color: #55ff55;
+        }
+        
+        .join-room-form {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #444;
+            border-radius: 5px;
+            color: white;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        .checkbox-group input {
+            margin-right: 10px;
+        }
+        
+        .lobby {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .player-list {
+            margin: 15px 0;
+        }
+        
+        .player-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        
+        .player-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .player-name {
+            flex-grow: 1;
+        }
+        
+        .player-host {
+            color: #ffaa00;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .chat-box {
+            height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        
+        .chat-message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .chat-sender {
+            color: #55aaff;
+            font-weight: bold;
+        }
+        
+        .game-settings {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            cursor: pointer;
+            flex-grow: 1;
+            text-align: center;
+        }
+        
+        .tab.active {
+            background: #ff3366;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        #game-container {
+            position: absolute;
+            inset: 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- MULTIPLAYER LANDING PAGE -->
+    <div id="multiplayer-container">
+        <button class="back-button" onclick="window.location.href='index.html'">← BACK TO MAIN</button>
+        
+        <div class="multiplayer-section">
+            <h1>NZCHASE MULTIPLAYER</h1>
+            <p>Play with friends or join public rooms!</p>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('public-rooms')">Public Rooms</button>
+                <button class="tab" onclick="showTab('create-room')">Create Room</button>
+                <button class="tab" onclick="showTab('join-private')">Join Private</button>
+            </div>
+            
+            <!-- PUBLIC ROOMS TAB -->
+            <div id="public-rooms" class="tab-content active">
+                <h2>Public Rooms Online</h2>
+                <div id="room-list" class="room-list">
+                    <!-- Rooms will be loaded here -->
+                    <div class="room-card" onclick="refreshRooms()">
+                        <h3>🔃 Refresh Rooms</h3>
+                        <p>Click to load available rooms</p>
+                    </div>
+                </div>
+                
+                <div class="join-room-form">
+                    <h3>Quick Join</h3>
+                    <div class="input-group">
+                        <label for="quick-name">Your Name:</label>
+                        <input type="text" id="quick-name" placeholder="Enter your name" value="Player">
+                    </div>
+                    <button id="quick-join-btn" style="width: 100%;">JOIN RANDOM ROOM</button>
+                </div>
+            </div>
+            
+            <!-- CREATE ROOM TAB -->
+            <div id="create-room" class="tab-content">
+                <h2>Create New Room</h2>
+                
+                <div class="input-group">
+                    <label for="host-name">Host Name:</label>
+                    <input type="text" id="host-name" placeholder="Your name" value="Host">
+                </div>
+                
+                <div class="input-group">
+                    <label for="room-name">Room Name (Optional):</label>
+                    <input type="text" id="room-name" placeholder="Cool Room Name">
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="private-room" checked>
+                    <label for="private-room">Private Room (Requires Password)</label>
+                </div>
+                
+                <div class="input-group" id="password-group">
+                    <label for="room-password">Room Password:</label>
+                    <input type="password" id="room-password" placeholder="Enter password">
+                </div>
+                
+                <div class="input-group">
+                    <label for="max-players">Max Players:</label>
+                    <input type="range" id="max-players" min="2" max="8" value="4">
+                    <span id="max-players-value">4</span>
+                </div>
+                
+                <div class="game-settings">
+                    <h3>Game Settings</h3>
+                    <p>These settings will apply to all players in the room.</p>
+                    
+                    <div class="input-group">
+                        <label for="mp-bot-speed">Bot Speed: <span id="mp-bot-speed-value">100%</span></label>
+                        <input type="range" id="mp-bot-speed" min="50" max="300" value="100">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="mp-player-speed">Player Speed: <span id="mp-player-speed-value">100%</span></label>
+                        <input type="range" id="mp-player-speed" min="50" max="300" value="100">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="mp-map-scale">Map Scale: <span id="mp-map-scale-value">15.0x</span></label>
+                        <input type="range" id="mp-map-scale" min="0.1" max="20" value="15.0" step="0.1">
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="mp-auto-floor" checked>
+                        <label for="mp-auto-floor">Auto Floor for Custom Maps</label>
+                    </div>
+                </div>
+                
+                <button id="create-room-btn" style="width: 100%; padding: 15px; font-size: 18px;">
+                    🎮 CREATE ROOM & START LOBBY
+                </button>
+            </div>
+            
+            <!-- JOIN PRIVATE TAB -->
+            <div id="join-private" class="tab-content">
+                <h2>Join Private Room</h2>
+                
+                <div class="join-room-form">
+                    <div class="input-group">
+                        <label for="private-name">Your Name:</label>
+                        <input type="text" id="private-name" placeholder="Enter your name" value="Player">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="room-code">Room Code:</label>
+                        <input type="text" id="room-code" placeholder="Enter 6-digit room code" maxlength="6" style="text-transform: uppercase;">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="join-password">Password (if required):</label>
+                        <input type="password" id="join-password" placeholder="Enter password">
+                    </div>
+                    
+                    <button id="join-private-btn" style="width: 100%;">JOIN PRIVATE ROOM</button>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: rgba(255, 51, 102, 0.1); border-radius: 5px;">
+                    <h4>📋 How to Join:</h4>
+                    <p>1. Get the 6-digit room code from your friend</p>
+                    <p>2. Enter your name and the room code above</p>
+                    <p>3. Enter password if the room is private</p>
+                    <p>4. Click "JOIN PRIVATE ROOM"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- LOBBY (Hidden until room joined) -->
+    <div id="lobby-container" style="display: none;">
+        <button class="back-button" onclick="leaveLobby()">← LEAVE LOBBY</button>
+        
+        <div class="multiplayer-section">
+            <h1 id="lobby-title">LOBBY</h1>
+            <p id="lobby-code">Room Code: <span id="room-code-display">------</span></p>
+            <p id="lobby-status">Waiting for host to start game...</p>
+            
+            <div class="lobby">
+                <h3>👥 Players in Room</h3>
+                <div id="player-list" class="player-list">
+                    <!-- Players will appear here -->
+                </div>
+                
+                <div id="host-controls" style="display: none;">
+                    <h3>🎮 Host Controls</h3>
+                    
+                    <div class="game-settings">
+                        <h4>Upload Game Files (All players will use these)</h4>
+                        
+                        <div class="input-group">
+                            <label>Nextbot Image (REQUIRED):</label>
+                            <input type="file" id="mp-nextbot-image" accept="image/*" class="file-input">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Background Music (Optional):</label>
+                            <input type="file" id="mp-bg-music" accept="audio/*" class="file-input">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Nextbot Sounds (Optional, multiple):</label>
+                            <input type="file" id="mp-nextbot-sounds" accept="audio/*" class="file-input" multiple>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Custom 3D Map (Optional):</label>
+                            <input type="file" id="mp-custom-map" accept=".gltf,.glb,.obj,.fbx" class="file-input">
+                            <p class="instructions">If no map uploaded, random maze will be generated</p>
+                        </div>
+                    </div>
+                    
+                    <button id="start-game-btn" style="width: 100%; padding: 15px; font-size: 18px; margin-top: 20px;">
+                        🚀 START GAME FOR ALL PLAYERS
+                    </button>
+                </div>
+                
+                <div id="player-waiting" style="text-align: center; padding: 20px;">
+                    <h3>⏳ Waiting for host to start the game...</h3>
+                    <p>Host needs to upload game files and click "START GAME"</p>
+                </div>
+                
+                <div class="chat-box" id="lobby-chat">
+                    <!-- Chat messages will appear here -->
+                </div>
+                
+                <div class="input-group" style="display: flex;">
+                    <input type="text" id="chat-input" placeholder="Type message..." style="flex-grow: 1; margin-right: 10px;">
+                    <button id="send-chat-btn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- GAME CONTAINER (Hidden until game starts) -->
+    <div id="game-container">
+        <!-- Game will be rendered here -->
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+    
+    <!-- Singleplayer game logic (for when game starts) -->
+    <script src="game.js"></script>
+    
+    <!-- Multiplayer client logic -->
+    <script src="multiplayer-client.js"></script>
+</body>
+</html>
