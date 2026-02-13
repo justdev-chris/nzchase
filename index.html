@@ -18,10 +18,9 @@
                 
                 <!-- Nextbot 1 -->
                 <div class="nextbot-entry">
-                    <h4>Nextbot #1</h4>
-                    <p>Image (required):</p>
+                    <h4>Nextbot #1 (Required)</h4>
+                    <p>Image:</p>
                     <input type="file" id="nextbotImage1" accept="image/*" class="file-input" required>
-                    
                     <p>Sound (optional):</p>
                     <input type="file" id="nextbotSound1" accept="audio/*" class="file-input">
                 </div>
@@ -29,9 +28,8 @@
                 <!-- Nextbot 2 -->
                 <div class="nextbot-entry">
                     <h4>Nextbot #2</h4>
-                    <p>Image (required):</p>
+                    <p>Image:</p>
                     <input type="file" id="nextbotImage2" accept="image/*" class="file-input">
-                    
                     <p>Sound (optional):</p>
                     <input type="file" id="nextbotSound2" accept="audio/*" class="file-input">
                 </div>
@@ -39,9 +37,8 @@
                 <!-- Nextbot 3 -->
                 <div class="nextbot-entry">
                     <h4>Nextbot #3</h4>
-                    <p>Image (required):</p>
+                    <p>Image:</p>
                     <input type="file" id="nextbotImage3" accept="image/*" class="file-input">
-                    
                     <p>Sound (optional):</p>
                     <input type="file" id="nextbotSound3" accept="audio/*" class="file-input">
                 </div>
@@ -49,9 +46,8 @@
                 <!-- Nextbot 4 -->
                 <div class="nextbot-entry">
                     <h4>Nextbot #4</h4>
-                    <p>Image (required):</p>
+                    <p>Image:</p>
                     <input type="file" id="nextbotImage4" accept="image/*" class="file-input">
-                    
                     <p>Sound (optional):</p>
                     <input type="file" id="nextbotSound4" accept="audio/*" class="file-input">
                 </div>
@@ -59,26 +55,20 @@
                 <!-- Nextbot 5 -->
                 <div class="nextbot-entry">
                     <h4>Nextbot #5</h4>
-                    <p>Image (required):</p>
+                    <p>Image:</p>
                     <input type="file" id="nextbotImage5" accept="image/*" class="file-input">
-                    
                     <p>Sound (optional):</p>
                     <input type="file" id="nextbotSound5" accept="audio/*" class="file-input">
                 </div>
-                
-                <p class="instructions" style="color: #aaa; font-size: 12px;">You can add up to 5 nextbots. Only Nextbot #1 is required.</p>
             </div>
             
             <div class="menu-section">
                 <h3><span class="optional">Optional Audio</span></h3>
                 <p>Background Music:</p>
                 <input type="file" id="bgMusic" accept="audio/*" class="file-input">
-                <div id="lastBgMusicPreview" class="file-preview" style="display: none;">
-                    <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastBgMusicName"></span></p>
-                </div>
                 
                 <div class="slider-container">
-                    <label>Master Volume: <span id="volumeDisplay" class="slider-value">50%</span></label>
+                    <label>Master Volume: <span id="volumeDisplay">50%</span></label>
                     <input type="range" id="masterVolume" min="0" max="100" value="50">
                 </div>
             </div>
@@ -87,15 +77,28 @@
                 <h3><span class="optional">Custom 3D Map</span></h3>
                 <p>Upload 3D Map (GLTF/GLB/OBJ/FBX):</p>
                 <input type="file" id="map3d" accept=".gltf,.glb,.obj,.fbx" class="file-input">
-                <div id="lastMapPreview" class="file-preview" style="display: none;">
-                    <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastMapName"></span></p>
-                </div>
-                <p class="instructions">Optional: Upload your own 3D map model. If not provided, a random maze will be generated.</p>
                 
-               <div class="slider-container">
-                 <label>Map Scale: <span id="mapScaleValue" class="slider-value">10.0</span>x</label>
-                 <input type="range" id="mapScale" min="0.1" max="20" value="10.0" step="0.1">
-                 <p class="instructions">(Small maps? Try 10x-20x scale)</p>
+                <!-- SPAWN PICKER -->
+                <div style="margin-top: 15px; padding: 10px; background: #222; border-radius: 5px;">
+                    <p style="color: #ff3366; margin-bottom: 10px;">📍 SPAWN POINT PICKER</p>
+                    <p style="font-size: 12px; color: #aaa; margin-bottom: 10px;">Click on the 3D map to set where you spawn:</p>
+                    
+                    <button id="pickSpawnBtn" class="secondary-btn" style="width: 100%; margin-bottom: 10px; background: #ff3366; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer;">🎯 Pick Spawn Point</button>
+                    
+                    <div id="spawnCoordinates" style="display: none; background: #1a1a1a; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                        <p style="color: #55ff55;">Spawn set at:</p>
+                        <p>X: <span id="spawnX">0</span></p>
+                        <p>Y: <span id="spawnY">0</span></p>
+                        <p>Z: <span id="spawnZ">0</span></p>
+                        <button id="resetSpawnBtn" style="background: #ff5555; color: white; border: none; padding: 5px 10px; border-radius: 3px; margin-top: 5px; cursor: pointer;">Reset</button>
+                    </div>
+                    
+                    <div id="spawnPreview" style="width: 100%; height: 200px; border: 2px solid #ff3366; border-radius: 5px; margin-top: 10px; display: none;"></div>
+                </div>
+                
+                <div class="slider-container">
+                    <label>Map Scale: <span id="mapScaleValue">10.0x</span></label>
+                    <input type="range" id="mapScale" min="0.1" max="20" value="10.0" step="0.1">
                 </div>
                 
                 <div class="checkbox-container">
@@ -107,15 +110,15 @@
             <div class="menu-section">
                 <h3>Game Settings</h3>
                 <div class="slider-container">
-                    <label>Player Speed: <span id="playerSpeedValue" class="slider-value">100%</span></label>
+                    <label>Player Speed: <span id="playerSpeedValue">100%</span></label>
                     <input type="range" id="playerSpeed" min="50" max="300" value="100">
                 </div>
                 <div class="slider-container">
-                    <label>Jump Height: <span id="jumpHeightValue" class="slider-value">100%</span></label>
+                    <label>Jump Height: <span id="jumpHeightValue">100%</span></label>
                     <input type="range" id="jumpHeight" min="50" max="300" value="100">
                 </div>
                 <div class="slider-container">
-                    <label>Bot Speed: <span id="botSpeedValue" class="slider-value">100%</span></label>
+                    <label>Bot Speed: <span id="botSpeedValue">100%</span></label>
                     <input type="range" id="botSpeed" min="50" max="300" value="100">
                 </div>
                 
@@ -126,10 +129,10 @@
             </div>
             
             <button id="playBtn" disabled>START GAME</button>
-            <button id="clearMemoryBtn" style="background: #333;">Clear Saved Settings</button>
+            <button id="clearMemoryBtn" style="background: #333; color: white;">Clear Saved Settings</button>
             
             <p class="instructions">
-                WASD: Move • Mouse: Side-to-side only • SPACE: Jump • SHIFT: Sprint • ESC: Pause
+                WASD: Move • Mouse: Look • SPACE: Jump • SHIFT: Sprint • ESC: Pause
             </p>
         </div>
     </div>
@@ -176,12 +179,10 @@
     <div id="death-overlay">
         <div id="death-content">
             <h1 id="death-title">GAME OVER</h1>
-            <p>Time Survived: <span id="death-time">0</span> seconds</p>
-            <p>Distance Run: <span id="death-distance">0</span> meters</p>
+            <p>Time: <span id="death-time">0</span>s</p>
+            <p>Distance: <span id="death-distance">0</span>m</p>
             <p>Nextbots: <span id="death-nextbots">0</span></p>
-            <div id="death-buttons">
-                <button id="menuBtn">MAIN MENU</button>
-            </div>
+            <button id="menuBtn">MAIN MENU</button>
         </div>
     </div>
 
@@ -190,6 +191,8 @@
     <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
     <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
-    <script src="game.js"></script>
+    <script src="core.js"></script>
+    <script src="maze.js"></script>
+    <script src="nextbots.js"></script>
 </body>
 </html>
