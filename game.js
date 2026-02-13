@@ -1,8 +1,8 @@
 // ========== GAME STATE ==========
 let scene, camera, renderer;
-let bot;
+let nextbots = []; // Array for multiple nextbots
 let playerVelocityY = 0;
-let botVelocityY = 0;
+let botVelocities = []; // Array for bot velocities
 const gravity = -0.03;
 const floorY = 2.0;
 let isOnGround = true;
@@ -29,19 +29,19 @@ let isDead = false;
 let playerSpeedMultiplier = 1;
 let jumpHeightMultiplier = 1;
 let botSpeedMultiplier = 1;
-let mapScale = 10.0; // Increased default to 10x
+let mapScale = 10.0;
 
 // ========== AUDIO SYSTEM ==========
 let audioContext;
-let bgMusic, nextbotAudio = [];
+let bgMusic, nextbotAudio = []; // Array for all bot sounds
 let masterGain, musicGain, sfxGain;
 let isMuted = false;
-let nextbotSoundInterval;
+let nextbotSoundIntervals = []; // Separate intervals for each bot
 
 // ========== FILE STORAGE ==========
-let savedNextbotImage = null;
+let savedNextbotImages = []; // Array for 5 images
 let savedBgMusic = null;
-let savedNextbotSounds = [];
+let savedNextbotSounds = []; // Array for 5 sound files
 let saved3DMap = null;
 let autoFloorEnabled = true;
 
@@ -49,6 +49,12 @@ let autoFloorEnabled = true;
 let currentMapModel = null;
 let mapColliders = [];
 let mapBounds = null;
+
+// ========== MAZE GENERATION ==========
+let mazeWalls = [];
+let mazeSize = 60; // Bigger maze!
+let cellSize = 8; // Size of each maze cell
+let wallHeight = 5;
 
 // ========== UI ELEMENT GETTERS ==========
 function getElement(id) {
@@ -108,19 +114,9 @@ function loadSavedSettings() {
                 autoFloorEnabled = settings.autoFloor;
             }
             
-            if (settings.nextbotImageName) {
-                getElement('lastNextbotName').textContent = settings.nextbotImageName;
-                getElement('lastNextbotPreview').style.display = 'block';
-            }
-            
             if (settings.bgMusicName) {
                 getElement('lastBgMusicName').textContent = settings.bgMusicName;
                 getElement('lastBgMusicPreview').style.display = 'block';
-            }
-            
-            if (settings.nextbotSoundsCount) {
-                getElement('lastSoundsCount').textContent = settings.nextbotSoundsCount;
-                getElement('lastSoundsPreview').style.display = 'block';
             }
             
             if (settings.map3dName) {
@@ -144,9 +140,7 @@ function saveSettings() {
         masterVolume: getElement('masterVolume').value,
         mapScale: getElement('mapScale').value,
         autoFloor: getElement('autoFloor').checked,
-        nextbotImageName: savedNextbotImage ? savedNextbotImage.name : null,
         bgMusicName: savedBgMusic ? savedBgMusic.name : null,
-        nextbotSoundsCount: savedNextbotSounds.length,
         map3dName: saved3DMap ? saved3DMap.name : null
     };
     
@@ -155,54 +149,63 @@ function saveSettings() {
 
 function clearSavedSettings() {
     localStorage.removeItem('nzchase_settings');
-    savedNextbotImage = null;
+    savedNextbotImages = [];
     savedBgMusic = null;
     savedNextbotSounds = [];
     saved3DMap = null;
     
-    getElement('lastNextbotPreview').style.display = 'none';
     getElement('lastBgMusicPreview').style.display = 'none';
-    getElement('lastSoundsPreview').style.display = 'none';
     getElement('lastMapPreview').style.display = 'none';
     
     getElement('playerSpeed').value = 100;
     getElement('jumpHeight').value = 100;
     getElement('botSpeed').value = 100;
     getElement('masterVolume').value = 50;
-    getElement('mapScale').value = 10.0; // Updated default
+    getElement('mapScale').value = 10.0;
     getElement('autoFloor').checked = true;
     
     playerSpeedMultiplier = 1;
     jumpHeightMultiplier = 1;
     botSpeedMultiplier = 1;
-    mapScale = 10.0; // Updated default
+    mapScale = 10.0;
     autoFloorEnabled = true;
     
     getElement('playerSpeedValue').textContent = '100%';
     getElement('jumpHeightValue').textContent = '100%';
     getElement('botSpeedValue').textContent = '100%';
     getElement('volumeDisplay').textContent = '50%';
-    getElement('mapScaleValue').textContent = '10.0x'; // Updated display
+    getElement('mapScaleValue').textContent = '10.0x';
     
     alert("Settings cleared!");
 }
 
 function setupEventListeners() {
-    getElement('nextbotImage').addEventListener('change', (e) => {
-        if (e.target.files[0]) {
-            savedNextbotImage = e.target.files[0];
+    // Nextbot 1-5 image inputs
+    for (let i = 1; i <= 5; i++) {
+        const imgInput = getElement(`nextbotImage${i}`);
+        if (imgInput) {
+            imgInput.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    savedNextbotImages[i-1] = e.target.files[0];
+                }
+                updatePlayButton();
+            });
         }
-        updatePlayButton();
-    });
+        
+        const soundInput = getElement(`nextbotSound${i}`);
+        if (soundInput) {
+            soundInput.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    savedNextbotSounds[i-1] = e.target.files[0];
+                }
+            });
+        }
+    }
     
     getElement('bgMusic').addEventListener('change', (e) => {
         if (e.target.files[0]) {
             savedBgMusic = e.target.files[0];
         }
-    });
-    
-    getElement('nextbotSounds').addEventListener('change', (e) => {
-        savedNextbotSounds = Array.from(e.target.files);
     });
     
     getElement('map3d').addEventListener('change', (e) => {
@@ -211,7 +214,6 @@ function setupEventListeners() {
         }
     });
     
-    // Map scale slider now goes up to 20x
     getElement('mapScale').addEventListener('input', (e) => {
         mapScale = parseFloat(e.target.value);
         getElement('mapScaleValue').textContent = e.target.value + 'x';
@@ -270,7 +272,9 @@ function setupEventListeners() {
 }
 
 function updatePlayButton() {
-    getElement('playBtn').disabled = !getElement('nextbotImage').files[0];
+    // Check if at least nextbot #1 has an image
+    const hasFirstImage = getElement('nextbotImage1').files && getElement('nextbotImage1').files[0];
+    getElement('playBtn').disabled = !hasFirstImage;
 }
 
 function setupAudioContext() {
@@ -298,11 +302,19 @@ async function startGame() {
     try {
         saveSettings();
         
-        const nextbotURL = URL.createObjectURL(getElement('nextbotImage').files[0]);
+        // Collect all nextbot images that exist
+        let nextbotURLs = [];
+        for (let i = 1; i <= 5; i++) {
+            const imgInput = getElement(`nextbotImage${i}`);
+            if (imgInput && imgInput.files && imgInput.files[0]) {
+                nextbotURLs.push(URL.createObjectURL(imgInput.files[0]));
+            }
+        }
+        
         await loadAudioFiles();
         
         setTimeout(() => {
-            initGame(nextbotURL);
+            initGame(nextbotURLs);
             getElement('loading').style.display = 'none';
         }, 500);
         
@@ -316,7 +328,6 @@ async function loadAudioFiles() {
     if (!audioContext) return;
     
     const bgMusicFile = getElement('bgMusic').files[0];
-    const nextbotSoundsFiles = getElement('nextbotSounds').files;
     
     if (bgMusic) {
         bgMusic.stop();
@@ -330,11 +341,14 @@ async function loadAudioFiles() {
         }
     }
     
+    // Load all nextbot sounds (up to 5)
     nextbotAudio = [];
-    
-    for (let i = 0; i < nextbotSoundsFiles.length; i++) {
-        const sound = await loadAudioFile(nextbotSoundsFiles[i], sfxGain);
-        if (sound) nextbotAudio.push(sound);
+    for (let i = 1; i <= 5; i++) {
+        const soundInput = getElement(`nextbotSound${i}`);
+        if (soundInput && soundInput.files && soundInput.files[0]) {
+            const sound = await loadAudioFile(soundInput.files[0], sfxGain);
+            if (sound) nextbotAudio.push(sound);
+        }
     }
 }
 
@@ -353,13 +367,17 @@ function loadAudioFile(file, destination) {
     });
 }
 
-function playRandomNextbotSound() {
+function playNextbotSound(botIndex) {
     if (nextbotAudio.length > 0 && !isMuted && !isDead) {
-        const sound = nextbotAudio[Math.floor(Math.random() * nextbotAudio.length)];
-        const newSound = audioContext.createBufferSource();
-        newSound.buffer = sound.buffer;
-        newSound.connect(sfxGain);
-        newSound.start();
+        // Try to play the sound for this specific bot, or random if not available
+        const soundIndex = botIndex < nextbotAudio.length ? botIndex : Math.floor(Math.random() * nextbotAudio.length);
+        const sound = nextbotAudio[soundIndex];
+        if (sound && sound.buffer) {
+            const newSound = audioContext.createBufferSource();
+            newSound.buffer = sound.buffer;
+            newSound.connect(sfxGain);
+            newSound.start();
+        }
     }
 }
 
@@ -380,6 +398,7 @@ function togglePause() {
         document.exitPointerLock();
         getElement('pause-time').textContent = Math.floor(gameTime);
         getElement('pause-distance').textContent = Math.floor(distanceTraveled);
+        getElement('pause-nextbots').textContent = nextbots.length;
     }
 }
 
@@ -397,6 +416,7 @@ function showDeathScreen() {
     
     getElement('death-time').textContent = Math.floor(gameTime);
     getElement('death-distance').textContent = Math.floor(distanceTraveled);
+    getElement('death-nextbots').textContent = nextbots.length;
     
     getElement('death-overlay').style.display = 'flex';
     getElement('death-title').textContent = 'GAME OVER';
@@ -415,7 +435,7 @@ function returnToMenu() {
 }
 
 // ========== GAME INITIALIZATION ==========
-function initGame(nextbotURL) {
+function initGame(nextbotURLs) {
     getElement("menu").style.display = "none";
     getElement("hud").style.display = "block";
     getElement("crosshair").style.display = "block";
@@ -427,17 +447,19 @@ function initGame(nextbotURL) {
     gameTime = 0;
     mapColliders = [];
     mapBounds = null;
+    nextbots = [];
+    botVelocities = [];
     
     basePlayerSpeed = 0.35 * playerSpeedMultiplier;
     maxSpeed = basePlayerSpeed;
     baseBotSpeed = 0.3 * botSpeedMultiplier;
     
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x001122);
-    scene.fog = new THREE.Fog(0x001122, 20, 200);
+    scene.background = new THREE.Color(0x111122);
+    scene.fog = new THREE.Fog(0x111122, 30, 200);
 
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, floorY + 2, 5);
+    camera.position.set(0, floorY + 2, 0);
     camera.rotation.x = 0;
     lastPosition.copy(camera.position);
 
@@ -450,11 +472,11 @@ function initGame(nextbotURL) {
 
     setupMouseControls();
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambientLight = new THREE.AmbientLight(0x404060);
     scene.add(ambientLight);
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(100, 300, 100);
+    directionalLight.position.set(50, 100, 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
@@ -463,16 +485,174 @@ function initGame(nextbotURL) {
     if (saved3DMap) {
         load3DMap();
     } else {
-        createRandomMap();
+        generateMaze(); // Now generates an ACTUAL MAZE!
     }
 
-    createNextbot(nextbotURL);
+    createAllNextbots(nextbotURLs);
 
     animate();
     
+    // Set up random sound intervals for each bot
+    nextbotSoundIntervals.forEach(interval => clearInterval(interval));
+    nextbotSoundIntervals = [];
+    
     if (nextbotAudio.length > 0) {
-        nextbotSoundInterval = setInterval(playRandomNextbotSound, 5000 + Math.random() * 10000);
+        for (let i = 0; i < nextbots.length; i++) {
+            const interval = setInterval(() => {
+                if (!isPaused && !isDead && nextbots[i]) {
+                    playNextbotSound(i);
+                }
+            }, 8000 + Math.random() * 7000);
+            nextbotSoundIntervals.push(interval);
+        }
     }
+}
+
+// ========== MAZE GENERATION ==========
+function generateMaze() {
+    console.log("Generating maze...");
+    
+    // Create floor
+    const floorGeometry = new THREE.PlaneGeometry(mazeSize * cellSize, mazeSize * cellSize);
+    const floorMaterial = new THREE.MeshLambertMaterial({ 
+        color: 0x2a4a3a,
+        side: THREE.DoubleSide
+    });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = Math.PI / 2;
+    floor.position.y = 0;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    
+    // Generate a simple perfect maze using recursive backtracking
+    const maze = generateMazeGrid(mazeSize, mazeSize);
+    
+    // Wall material with slight color variation
+    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8b6b4d });
+    const wallMaterial2 = new THREE.MeshLambertMaterial({ color: 0x9b7b5d });
+    
+    // Create walls
+    for (let y = 0; y < mazeSize; y++) {
+        for (let x = 0; x < mazeSize; x++) {
+            if (maze[y][x] === 1) { // It's a wall
+                // Random height variation for visual interest
+                const height = wallHeight + (Math.random() * 2 - 1);
+                
+                const wall = new THREE.Mesh(
+                    new THREE.BoxGeometry(cellSize - 0.5, height, cellSize - 0.5),
+                    Math.random() > 0.5 ? wallMaterial : wallMaterial2
+                );
+                
+                // Position in the center of the cell
+                wall.position.set(
+                    (x - mazeSize/2) * cellSize + cellSize/2,
+                    height/2,
+                    (y - mazeSize/2) * cellSize + cellSize/2
+                );
+                
+                wall.castShadow = true;
+                wall.receiveShadow = true;
+                scene.add(wall);
+                
+                // Add to colliders
+                const bbox = new THREE.Box3().setFromObject(wall);
+                mapColliders.push(bbox);
+                mazeWalls.push(wall);
+            }
+        }
+    }
+    
+    // Add some random pillars/decorations in open spaces
+    const pillarMaterial = new THREE.MeshLambertMaterial({ color: 0xaa8866 });
+    for (let i = 0; i < 30; i++) {
+        const x = Math.floor(Math.random() * mazeSize);
+        const y = Math.floor(Math.random() * mazeSize);
+        if (maze[y][x] === 0) { // Open space
+            const pillar = new THREE.Mesh(
+                new THREE.CylinderGeometry(1, 1.5, 3, 8),
+                pillarMaterial
+            );
+            pillar.position.set(
+                (x - mazeSize/2) * cellSize + cellSize/2,
+                1.5,
+                (y - mazeSize/2) * cellSize + cellSize/2
+            );
+            pillar.castShadow = true;
+            pillar.receiveShadow = true;
+            scene.add(pillar);
+        }
+    }
+    
+    console.log("Maze generated with", mazeWalls.length, "walls");
+}
+
+function generateMazeGrid(width, height) {
+    // Initialize grid with all walls
+    const grid = [];
+    for (let y = 0; y < height; y++) {
+        grid[y] = [];
+        for (let x = 0; x < width; x++) {
+            grid[y][x] = 1; // 1 = wall
+        }
+    }
+    
+    // Random starting point
+    const startX = Math.floor(Math.random() * Math.floor(width/2)) * 2 + 1;
+    const startY = Math.floor(Math.random() * Math.floor(height/2)) * 2 + 1;
+    
+    function carve(x, y) {
+        grid[y][x] = 0; // 0 = path
+        
+        const directions = [
+            [0, -2], // up
+            [2, 0],  // right
+            [0, 2],  // down
+            [-2, 0]  // left
+        ];
+        
+        // Randomize directions
+        for (let i = directions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [directions[i], directions[j]] = [directions[j], directions[i]];
+        }
+        
+        for (let [dx, dy] of directions) {
+            const nx = x + dx;
+            const ny = y + dy;
+            
+            if (nx > 0 && nx < width-1 && ny > 0 && ny < height-1 && grid[ny][nx] === 1) {
+                // Carve the wall between
+                grid[y + dy/2][x + dx/2] = 0;
+                carve(nx, ny);
+            }
+        }
+    }
+    
+    carve(startX, startY);
+    
+    // Ensure border is walls
+    for (let x = 0; x < width; x++) {
+        grid[0][x] = 1;
+        grid[height-1][x] = 1;
+    }
+    for (let y = 0; y < height; y++) {
+        grid[y][0] = 1;
+        grid[y][width-1] = 1;
+    }
+    
+    return grid;
+}
+
+function findRandomOpenPosition() {
+    // Find a random open position in the maze
+    const margin = 3 * cellSize;
+    const centerOffset = (mazeSize * cellSize) / 2 - margin;
+    
+    return new THREE.Vector3(
+        (Math.random() - 0.5) * centerOffset * 1.5,
+        4,
+        (Math.random() - 0.5) * centerOffset * 1.5
+    );
 }
 
 function load3DMap() {
@@ -483,37 +663,23 @@ function load3DMap() {
     const objectURL = URL.createObjectURL(file);
     
     const onLoad = (model) => {
-        // Apply the user's scale setting (now up to 20x!)
         model.scale.set(mapScale, mapScale, mapScale);
         
-        // Get the bounds of the model after scaling
         const box = new THREE.Box3().setFromObject(model);
         mapBounds = box;
         
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         
-        // Center the model
         model.position.sub(center);
         
         console.log("Map loaded - Original size:", size);
         console.log("Scale applied:", mapScale + "x");
-        console.log("Final map size:", size);
         
-        // Find a safe spawn position INSIDE the map bounds
         let safeSpawnPosition = findSafeSpawnPosition(box, size);
         camera.position.set(safeSpawnPosition.x, floorY + 2, safeSpawnPosition.z);
         lastPosition.copy(camera.position);
         
-        console.log("Player spawned at:", camera.position);
-        console.log("Map bounds:", box.min, "to", box.max);
-        
-        // Warn if map is very small
-        if (size.x < 50 || size.z < 50) {
-            console.warn("Map is very small! Try increasing the scale to 10x-20x.");
-        }
-        
-        // Add auto floor if enabled
         if (autoFloorEnabled) {
             const floorSize = Math.max(size.x, size.z) * 1.5;
             const floor = new THREE.Mesh(
@@ -529,31 +695,23 @@ function load3DMap() {
             scene.add(floor);
         }
         
-        // Process all meshes for collisions and materials
         model.traverse((child) => {
             if (child.isMesh) {
-                // Keep original material if it exists
                 if (!child.material) {
-                    child.material = new THREE.MeshLambertMaterial({ 
-                        color: 0x808080
-                    });
+                    child.material = new THREE.MeshLambertMaterial({ color: 0x808080 });
                 }
                 
-                // Enable shadows
                 child.castShadow = true;
                 child.receiveShadow = true;
                 
-                // Create collision box (already scaled)
                 child.geometry.computeBoundingBox();
                 const bbox = child.geometry.boundingBox.clone();
                 
-                // Apply world transformation
                 const worldMatrix = new THREE.Matrix4();
                 child.updateMatrixWorld();
                 worldMatrix.copy(child.matrixWorld);
                 bbox.applyMatrix4(worldMatrix);
                 
-                // Store for collision detection
                 mapColliders.push(bbox);
             }
         });
@@ -567,8 +725,8 @@ function load3DMap() {
     
     const onError = (error) => {
         console.error("Error loading 3D map:", error);
-        alert("Failed to load 3D map. Using random map instead.");
-        createRandomMap();
+        alert("Failed to load 3D map. Using random maze instead.");
+        generateMaze();
         getElement('loading').textContent = 'Loading...';
     };
     
@@ -587,56 +745,41 @@ function load3DMap() {
             fbxLoader.load(objectURL, onLoad, undefined, onError);
             break;
         default:
-            alert("Unsupported 3D format. Using random map.");
-            createRandomMap();
+            alert("Unsupported 3D format. Using random maze.");
+            generateMaze();
     }
 }
 
 function findSafeSpawnPosition(box, size) {
-    // First try: center of the map
     if (!isPositionBlocked(new THREE.Vector3(0, floorY + 2, 0))) {
-        console.log("Using center spawn");
         return new THREE.Vector3(0, 0, 0);
     }
     
-    // Calculate safe spawn radius (half of smaller dimension, minus player radius)
     const safeRadius = Math.min(Math.abs(size.x), Math.abs(size.z)) * 0.4 - 2;
     
-    // Try positions in a circle around center
-    const positions = [];
     for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
         const x = Math.cos(angle) * safeRadius;
         const z = Math.sin(angle) * safeRadius;
-        positions.push({ x, z });
-    }
-    
-    for (let pos of positions) {
-        const testPos = new THREE.Vector3(pos.x, floorY + 2, pos.z);
+        const testPos = new THREE.Vector3(x, floorY + 2, z);
         if (!isPositionBlocked(testPos)) {
-            console.log("Using radial spawn at angle");
             return testPos;
         }
     }
     
-    // Try grid search within bounds
     const step = Math.max(size.x, size.z) / 10;
     for (let x = box.min.x + step; x < box.max.x; x += step) {
         for (let z = box.min.z + step; z < box.max.z; z += step) {
             const testPos = new THREE.Vector3(x, floorY + 2, z);
             if (!isPositionBlocked(testPos)) {
-                console.log("Using grid search spawn");
                 return testPos;
             }
         }
     }
     
-    // Last resort: spawn at the highest point in the map
-    console.warn("No safe spawn found! Using emergency spawn at highest point");
     return new THREE.Vector3(0, box.max.y + 5, 0);
 }
 
 function isPositionBlocked(position) {
-    // Early exit if no colliders yet
     if (mapColliders.length === 0) return false;
     
     const playerBox = new THREE.Box3(
@@ -667,7 +810,6 @@ function checkMapCollision(newPosition) {
         }
     }
     
-    // Also check if we're outside map bounds
     if (mapBounds) {
         if (newPosition.x < mapBounds.min.x + 1 || newPosition.x > mapBounds.max.x - 1 ||
             newPosition.z < mapBounds.min.z + 1 || newPosition.z > mapBounds.max.z - 1) {
@@ -678,85 +820,66 @@ function checkMapCollision(newPosition) {
     return false;
 }
 
-function createRandomMap() {
-    const size = 400;
-    const halfSize = size / 2;
+function createAllNextbots(imageURLs) {
+    if (!imageURLs || imageURLs.length === 0) return;
     
-    const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(size, size, 40, 40),
-        new THREE.MeshLambertMaterial({ 
-            color: 0x1a3c2e,
-            side: THREE.DoubleSide
-        })
-    );
-    floor.rotation.x = Math.PI / 2;
-    floor.position.y = 0;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x2a4c3e });
-    const wallGeometry = new THREE.PlaneGeometry(size, 40);
-    
-    const walls = [
-        { pos: [0, 20, -halfSize], rot: [0, 0, 0] },
-        { pos: [0, 20, halfSize], rot: [0, Math.PI, 0] },
-        { pos: [-halfSize, 20, 0], rot: [0, Math.PI/2, 0] },
-        { pos: [halfSize, 20, 0], rot: [0, -Math.PI/2, 0] }
-    ];
-    
-    walls.forEach(wallData => {
-        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-        wall.position.set(...wallData.pos);
-        wall.rotation.set(...wallData.rot);
-        wall.receiveShadow = true;
-        scene.add(wall);
-    });
-
-    const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5c4e });
-    for (let i = 0; i < 20; i++) {
-        const height = Math.random() * 15 + 5;
-        const obstacle = new THREE.Mesh(
-            new THREE.BoxGeometry(
-                Math.random() * 10 + 5, 
-                height, 
-                Math.random() * 10 + 5
-            ),
-            obstacleMaterial
-        );
-        const maxPos = halfSize - 20;
-        obstacle.position.set(
-            Math.random() * (maxPos * 2) - maxPos,
-            height / 2,
-            Math.random() * (maxPos * 2) - maxPos
-        );
-        obstacle.castShadow = true;
-        obstacle.receiveShadow = true;
-        scene.add(obstacle);
-    }
-}
-
-function createNextbot(imgURL) {
     const texLoader = new THREE.TextureLoader();
-    texLoader.load(imgURL, function(texture) {
-        const aspect = texture.image.width / texture.image.height;
-        const botGeometry = new THREE.PlaneGeometry(8 * aspect, 8);
-        const botMaterial = new THREE.MeshLambertMaterial({ 
-            map: texture, 
-            transparent: true,
-            side: THREE.DoubleSide
+    
+    imageURLs.forEach((url, index) => {
+        texLoader.load(url, function(texture) {
+            const aspect = texture.image.width / texture.image.height;
+            const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
+            const botMaterial = new THREE.MeshLambertMaterial({ 
+                map: texture, 
+                transparent: true,
+                side: THREE.DoubleSide,
+                emissive: 0x330000
+            });
+            
+            const bot = new THREE.Mesh(botGeometry, botMaterial);
+            
+            // Spawn in different positions around the maze
+            const angle = (index / imageURLs.length) * Math.PI * 2;
+            const radius = 25 + Math.random() * 15;
+            bot.position.set(
+                Math.cos(angle) * radius,
+                4,
+                Math.sin(angle) * radius
+            );
+            
+            bot.castShadow = true;
+            bot.receiveShadow = true;
+            scene.add(bot);
+            
+            nextbots.push(bot);
+            botVelocities.push(0);
+            
+        }, undefined, function(error) {
+            // Fallback to colored cube if image fails
+            const botGeometry = new THREE.BoxGeometry(4, 4, 4);
+            const botMaterial = new THREE.MeshLambertMaterial({ 
+                color: [0xff3333, 0x33ff33, 0x3333ff, 0xffff33, 0xff33ff][index % 5]
+            });
+            const bot = new THREE.Mesh(botGeometry, botMaterial);
+            
+            const angle = (index / imageURLs.length) * Math.PI * 2;
+            const radius = 25 + Math.random() * 15;
+            bot.position.set(
+                Math.cos(angle) * radius,
+                2,
+                Math.sin(angle) * radius
+            );
+            
+            bot.castShadow = true;
+            bot.receiveShadow = true;
+            scene.add(bot);
+            
+            nextbots.push(bot);
+            botVelocities.push(0);
         });
-        bot = new THREE.Mesh(botGeometry, botMaterial);
-        bot.position.set(0, 4, -80);
-        bot.castShadow = true;
-        scene.add(bot);
-    }, undefined, function(error) {
-        const botGeometry = new THREE.BoxGeometry(6, 6, 6);
-        const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
-        bot = new THREE.Mesh(botGeometry, botMaterial);
-        bot.position.set(0, 3, -80);
-        bot.castShadow = true;
-        scene.add(bot);
     });
+    
+    getElement('nextbot-count').textContent = nextbots.length;
 }
 
 // ========== MOUSE CONTROLS ==========
@@ -886,15 +1009,21 @@ function animate() {
         lastPosition.copy(camera.position);
         getElement('distance').textContent = Math.floor(distanceTraveled);
         
-        if (bot) {
-            botVelocityY += gravity;
-            bot.position.y += botVelocityY;
+        // Update all nextbots
+        nextbots.forEach((bot, index) => {
+            if (!bot) return;
+            
+            // Gravity
+            if (botVelocities[index] === undefined) botVelocities[index] = 0;
+            botVelocities[index] += gravity;
+            bot.position.y += botVelocities[index];
             
             if (bot.position.y <= 4) {
                 bot.position.y = 4;
-                botVelocityY = 0;
+                botVelocities[index] = 0;
             }
             
+            // Move toward player
             const dir = new THREE.Vector3();
             dir.subVectors(camera.position, bot.position).normalize();
             
@@ -917,14 +1046,15 @@ function animate() {
             bot.lookAt(targetLook);
             
             if (Math.random() < 0.01 && bot.position.y <= 4.1) {
-                botVelocityY = 0.6;
+                botVelocities[index] = 0.6;
             }
             
+            // Damage player if too close
             if (distanceToPlayer < 8) {
-                playerHealth -= 2;
+                playerHealth -= 0.5;
                 getElement('health').textContent = Math.max(0, Math.floor(playerHealth));
                 
-                const shake = (8 - distanceToPlayer) / 2;
+                const shake = (8 - distanceToPlayer) / 4;
                 camera.position.x += (Math.random() - 0.5) * shake;
                 camera.position.z += (Math.random() - 0.5) * shake;
                 
@@ -938,6 +1068,7 @@ function animate() {
                 }
             }
             
+            // Teleport if too far
             if (distanceToPlayer > 80 && Math.random() < 0.005) {
                 const angle = Math.random() * Math.PI * 2;
                 const teleportDistance = 20 + Math.random() * 30;
@@ -947,16 +1078,19 @@ function animate() {
                     camera.position.z + Math.sin(angle) * teleportDistance
                 );
             }
+        });
+        
+        // Keep in bounds for maze
+        if (!saved3DMap) {
+            const bound = (mazeSize * cellSize) / 2 - 2;
+            if (camera.position.x > bound) camera.position.x = bound;
+            if (camera.position.x < -bound) camera.position.x = -bound;
+            if (camera.position.z > bound) camera.position.z = bound;
+            if (camera.position.z < -bound) camera.position.z = -bound;
         }
         
-        // Keep in bounds for random maps
-        if (!saved3DMap) {
-            const bounds = 180;
-            if (camera.position.x > bounds) camera.position.x = bounds;
-            if (camera.position.x < -bounds) camera.position.x = -bounds;
-            if (camera.position.z > bounds) camera.position.z = bounds;
-            if (camera.position.z < -bounds) camera.position.z = -bounds;
-        }
+        // Update HUD
+        getElement('nextbot-count').textContent = nextbots.length;
     }
     
     if (renderer && scene && camera) {
