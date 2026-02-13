@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NZChase</title>
+    <title>NZChase - Multiple Nextbots</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,12 +13,60 @@
             <h1>NZCHASE</h1>
             
             <div class="menu-section">
-                <h3><span class="required">* REQUIRED *</span></h3>
-                <p>Upload Nextbot Image:</p>
-                <input type="file" id="nextbotImage" accept="image/*" class="file-input" required>
-                <div id="lastNextbotPreview" class="file-preview" style="display: none;">
-                    <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastNextbotName"></span></p>
+                <h3><span class="required">* NEXTBOT COLLECTION *</span></h3>
+                <p>Add up to 5 nextbots with images and sounds:</p>
+                
+                <!-- Nextbot 1 -->
+                <div class="nextbot-entry">
+                    <h4>Nextbot #1</h4>
+                    <p>Image (required):</p>
+                    <input type="file" id="nextbotImage1" accept="image/*" class="file-input" required>
+                    
+                    <p>Sound (optional):</p>
+                    <input type="file" id="nextbotSound1" accept="audio/*" class="file-input">
                 </div>
+                
+                <!-- Nextbot 2 -->
+                <div class="nextbot-entry">
+                    <h4>Nextbot #2</h4>
+                    <p>Image (required):</p>
+                    <input type="file" id="nextbotImage2" accept="image/*" class="file-input">
+                    
+                    <p>Sound (optional):</p>
+                    <input type="file" id="nextbotSound2" accept="audio/*" class="file-input">
+                </div>
+                
+                <!-- Nextbot 3 -->
+                <div class="nextbot-entry">
+                    <h4>Nextbot #3</h4>
+                    <p>Image (required):</p>
+                    <input type="file" id="nextbotImage3" accept="image/*" class="file-input">
+                    
+                    <p>Sound (optional):</p>
+                    <input type="file" id="nextbotSound3" accept="audio/*" class="file-input">
+                </div>
+                
+                <!-- Nextbot 4 -->
+                <div class="nextbot-entry">
+                    <h4>Nextbot #4</h4>
+                    <p>Image (required):</p>
+                    <input type="file" id="nextbotImage4" accept="image/*" class="file-input">
+                    
+                    <p>Sound (optional):</p>
+                    <input type="file" id="nextbotSound4" accept="audio/*" class="file-input">
+                </div>
+                
+                <!-- Nextbot 5 -->
+                <div class="nextbot-entry">
+                    <h4>Nextbot #5</h4>
+                    <p>Image (required):</p>
+                    <input type="file" id="nextbotImage5" accept="image/*" class="file-input">
+                    
+                    <p>Sound (optional):</p>
+                    <input type="file" id="nextbotSound5" accept="audio/*" class="file-input">
+                </div>
+                
+                <p class="instructions" style="color: #aaa; font-size: 12px;">You can add up to 5 nextbots. Only Nextbot #1 is required.</p>
             </div>
             
             <div class="menu-section">
@@ -27,12 +75,6 @@
                 <input type="file" id="bgMusic" accept="audio/*" class="file-input">
                 <div id="lastBgMusicPreview" class="file-preview" style="display: none;">
                     <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastBgMusicName"></span></p>
-                </div>
-                
-                <p>Nextbot Sounds:</p>
-                <input type="file" id="nextbotSounds" accept="audio/*" class="file-input" multiple>
-                <div id="lastSoundsPreview" class="file-preview" style="display: none;">
-                    <p style="font-size: 12px; color: #55ff55;">Previously used: <span id="lastSoundsCount"></span> sounds</p>
                 </div>
                 
                 <div class="slider-container">
@@ -97,7 +139,8 @@
         <span style="color: #ff5555;">❤️ <span id="health">100</span></span> | 
         <span style="color: #55ff55;">🏃 <span id="distance">0</span>m</span> | 
         <span style="color: #5555ff;">⚡ <span id="speed">0</span></span> |
-        <span style="color: #ffff55;">⏱️ <span id="time">0</span>s</span>
+        <span style="color: #ffff55;">⏱️ <span id="time">0</span>s</span> |
+        <span style="color: #ff55ff;">👾 <span id="nextbot-count">0</span></span>
     </div>
 
     <!-- CROSSHAIR -->
@@ -124,6 +167,7 @@
         <h1>PAUSED</h1>
         <p>Time: <span id="pause-time">0</span>s</p>
         <p>Distance: <span id="pause-distance">0</span>m</p>
+        <p>Nextbots: <span id="pause-nextbots">0</span></p>
         <button id="resumeBtn">RESUME</button>
         <button id="pauseQuitBtn">MAIN MENU</button>
     </div>
@@ -134,6 +178,7 @@
             <h1 id="death-title">GAME OVER</h1>
             <p>Time Survived: <span id="death-time">0</span> seconds</p>
             <p>Distance Run: <span id="death-distance">0</span> meters</p>
+            <p>Nextbots: <span id="death-nextbots">0</span></p>
             <div id="death-buttons">
                 <button id="menuBtn">MAIN MENU</button>
             </div>
