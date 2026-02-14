@@ -10,79 +10,108 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
         return;
     }
     
-    const texLoader = new THREE.TextureLoader();
+    const hasGifSupport = typeof THREE.GifTexture !== 'undefined';
     
     imageURLs.forEach((url, index) => {
-        texLoader.load(url, 
-            function(texture) {
-                const aspect = texture.image.width / texture.image.height;
-                const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
-                const botMaterial = new THREE.MeshLambertMaterial({ 
-                    map: texture, 
-                    transparent: true,
-                    side: THREE.DoubleSide
-                });
-                
-                const bot = new THREE.Mesh(botGeometry, botMaterial);
-                
-                // Spawn at random position
-                const angle = Math.random() * Math.PI * 2;
-                const radius = 15 + Math.random() * 20;
-                bot.position.set(
-                    Math.cos(angle) * radius,
-                    30,
-                    Math.sin(angle) * radius
-                );
-                
-                // Bot personality for varied paths
-                bot.userData = {
-                    soundIndex: index,
-                    lastSoundTime: 0,
-                    isPlayingSound: false,
-                    aggression: 0.5 + Math.random() * 0.8,
-                    wanderFreq: 0.5 + Math.random() * 2.0,
-                    wanderAmp: 0.2 + Math.random() * 0.8,
-                    sideBias: (Math.random() - 0.5) * 1.5
-                };
-                
-                bot.castShadow = true;
-                bot.receiveShadow = true;
-                scene.add(bot);
-                
-                nextbotsArray.push(bot);
-                botVelocitiesArray.push(0);
-                console.log(`Bot ${index} spawned`);
-            },
-            undefined,
-            function(error) {
-                console.log("Texture failed, using cube");
-                const botGeometry = new THREE.BoxGeometry(3, 3, 3);
-                const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff00ff });
-                const bot = new THREE.Mesh(botGeometry, botMaterial);
-                
-                const angle = Math.random() * Math.PI * 2;
-                const radius = 15 + Math.random() * 20;
-                bot.position.set(
-                    Math.cos(angle) * radius,
-                    30,
-                    Math.sin(angle) * radius
-                );
-                
-                bot.userData = {
-                    soundIndex: index,
-                    lastSoundTime: 0,
-                    isPlayingSound: false,
-                    aggression: 0.5 + Math.random() * 0.8,
-                    wanderFreq: 0.5 + Math.random() * 2.0,
-                    wanderAmp: 0.2 + Math.random() * 0.8,
-                    sideBias: (Math.random() - 0.5) * 1.5
-                };
-                
-                scene.add(bot);
-                nextbotsArray.push(bot);
-                botVelocitiesArray.push(0);
+        const createBotWithTexture = (texture) => {
+            if (!texture) {
+                // Fallback to cube if texture failed
+                createFallbackBot(index, scene, nextbotsArray, botVelocitiesArray);
+                return;
             }
-        );
+            
+            const aspect = texture.image ? texture.image.width / texture.image.height : 1;
+            const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
+            const botMaterial = new THREE.MeshLambertMaterial({ 
+                map: texture, 
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            
+            const bot = new THREE.Mesh(botGeometry, botMaterial);
+            
+            // Spawn at random position
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 15 + Math.random() * 20;
+            bot.position.set(
+                Math.cos(angle) * radius,
+                30,
+                Math.sin(angle) * radius
+            );
+            
+            // Bot personality for varied paths
+            bot.userData = {
+                soundIndex: index,
+                lastSoundTime: 0,
+                isPlayingSound: false,
+                aggression: 0.5 + Math.random() * 0.8,
+                wanderFreq: 0.5 + Math.random() * 2.0,
+                wanderAmp: 0.2 + Math.random() * 0.8,
+                sideBias: (Math.random() - 0.5) * 1.5,
+                isGif: texture.isGIF || false
+            };
+            
+            bot.castShadow = true;
+            bot.receiveShadow = true;
+            scene.add(bot);
+            
+            nextbotsArray.push(bot);
+            botVelocitiesArray.push(0);
+            console.log(`Bot ${index} spawned ${bot.userData.isGif ? '(GIF)' : ''}`);
+        };
+        
+        const createFallbackBot = (idx, scene, botsArray, velocitiesArray) => {
+            const botGeometry = new THREE.BoxGeometry(3, 3, 3);
+            const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff00ff });
+            const bot = new THREE.Mesh(botGeometry, botMaterial);
+            
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 15 + Math.random() * 20;
+            bot.position.set(
+                Math.cos(angle) * radius,
+                30,
+                Math.sin(angle) * radius
+            );
+            
+            bot.userData = {
+                soundIndex: idx,
+                lastSoundTime: 0,
+                isPlayingSound: false,
+                aggression: 0.5 + Math.random() * 0.8,
+                wanderFreq: 0.5 + Math.random() * 2.0,
+                wanderAmp: 0.2 + Math.random() * 0.8,
+                sideBias: (Math.random() - 0.5) * 1.5,
+                isGif: false
+            };
+            
+            scene.add(bot);
+            botsArray.push(bot);
+            velocitiesArray.push(0);
+        };
+        
+        // Check if it's a GIF
+        const isGif = (typeof THREE.GifTexture !== 'undefined' && 
+                      THREE.GifTexture.isGif && 
+                      THREE.GifTexture.isGif(url)) || 
+                      url.toLowerCase().includes('.gif');
+        
+        if (isGif && hasGifSupport) {
+            // Load as GIF
+            THREE.GifTexture(url, (texture) => {
+                createBotWithTexture(texture);
+            });
+        } else {
+            // Load as regular texture
+            const texLoader = new THREE.TextureLoader();
+            texLoader.load(url, 
+                (texture) => createBotWithTexture(texture),
+                undefined,
+                (error) => {
+                    console.log("Texture failed, using cube");
+                    createFallbackBot(index, scene, nextbotsArray, botVelocitiesArray);
+                }
+            );
+        }
     });
     
     document.getElementById('nextbot-count').textContent = nextbotsArray.length;
