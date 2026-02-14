@@ -136,71 +136,44 @@ window.removeNextbot = function(num) {
     }
     
     const entry = document.getElementById(`nextbot-${num}`);
-    if (entry) {
-        // Store files BEFORE removing
-        const imageFiles = {};
-        const soundFiles = {};
+    if (!entry) return;
+    
+    // Remove the entry
+    entry.remove();
+    
+    // Get all remaining entries
+    const entries = document.querySelectorAll('.nextbot-entry');
+    nextbotCount = entries.length;
+    
+    // Renumber everything from scratch
+    entries.forEach((entry, index) => {
+        const newNum = index + 1;
         
-        for (let i = 1; i <= nextbotCount; i++) {
-            const imgInput = document.getElementById(`nextbotImage${i}`);
-            const soundInput = document.getElementById(`nextbotSound${i}`);
-            
-            if (imgInput && imgInput.files && imgInput.files[0]) {
-                imageFiles[i] = imgInput.files[0];
-            }
-            if (soundInput && soundInput.files && soundInput.files[0]) {
-                soundFiles[i] = soundInput.files[0];
-            }
+        // Update container ID
+        entry.id = `nextbot-${newNum}`;
+        
+        // Update heading
+        const heading = entry.querySelector('h3, h4');
+        const removeBtn = newNum > 1 ? `<button onclick="removeNextbot(${newNum})" class="remove-btn">✖</button>` : '';
+        heading.innerHTML = `Nextbot ${newNum} ${removeBtn}`;
+        
+        // Update input IDs - THIS IS THE KEY PART
+        const imgInput = entry.querySelector('input[type="file"]:first-of-type');
+        const soundInput = entry.querySelector('input[type="file"]:last-of-type');
+        
+        if (imgInput) {
+            imgInput.id = `nextbotImage${newNum}`;
         }
-        
-        // Remove the entry
-        entry.remove();
-        
-        // Clear saved data for removed slot
-        if (savedNextbotImages[num-1]) savedNextbotImages[num-1] = null;
-        if (savedNextbotSounds[num-1]) savedNextbotSounds[num-1] = null;
-        
-        // Renumber remaining entries
-        const entries = document.querySelectorAll('.nextbot-entry');
-        nextbotCount = entries.length;
-        
-        entries.forEach((entry, index) => {
-            const newNum = index + 1;
-            entry.id = `nextbot-${newNum}`;
-            
-            // Update heading
-            const heading = entry.querySelector('h3, h4');
-            const removeBtn = newNum > 1 ? `<button onclick="removeNextbot(${newNum})" class="remove-btn">✖</button>` : '';
-            heading.innerHTML = `Nextbot ${newNum} ${removeBtn}`;
-            
-            // Update input IDs and RESTORE FILES
-            const imgInput = entry.querySelector('input[type="file"]:first-of-type');
-            const soundInput = entry.querySelector('input[type="file"]:last-of-type');
-            
-            if (imgInput) {
-                imgInput.id = `nextbotImage${newNum}`;
-                // Find the file that should go here (shift everything down)
-                const sourceNum = newNum < num ? newNum : newNum + 1;
-                if (imageFiles[sourceNum]) {
-                    const dt = new DataTransfer();
-                    dt.items.add(imageFiles[sourceNum]);
-                    imgInput.files = dt.files;
-                }
-            }
-            
-            if (soundInput) {
-                soundInput.id = `nextbotSound${newNum}`;
-                const sourceNum = newNum < num ? newNum : newNum + 1;
-                if (soundFiles[sourceNum]) {
-                    const dt = new DataTransfer();
-                    dt.items.add(soundFiles[sourceNum]);
-                    soundInput.files = dt.files;
-                }
-            }
-        });
-        
-        updatePlayButton();
-    }
+        if (soundInput) {
+            soundInput.id = `nextbotSound${newNum}`;
+        }
+    });
+    
+    // Clear saved data for removed slot
+    if (savedNextbotImages[num-1]) savedNextbotImages[num-1] = null;
+    if (savedNextbotSounds[num-1]) savedNextbotSounds[num-1] = null;
+    
+    updatePlayButton();
 };
 
 // ========== INDEXEDDB FUNCTIONS ==========
