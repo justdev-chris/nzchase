@@ -1,7 +1,6 @@
 // ========== NEXTBOTS.JS - NEXTBOT MANAGER ==========
 
 let nextbotSoundIntervals = [];
-let baseBotSpeed = 0.3;
 
 function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) {
     if (!imageURLs || imageURLs.length === 0) return;
@@ -141,8 +140,8 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
         }
         
         // Damage player if too close
-        if (distanceToPlayer < 8) {
-            playerHealth -= 0.5;
+        if (distanceToPlayer < 4) {
+            window.playerHealth = 0;
             document.getElementById('health').textContent = Math.max(0, Math.floor(playerHealth));
             
             const shake = (8 - distanceToPlayer) / 4;
