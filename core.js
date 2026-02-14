@@ -245,30 +245,53 @@ async function loadSavedFiles() {
         await initDB();
         dbReady = true;
         
-        // Load nextbot images - loop until no more files
+        // Clear existing arrays
+        savedNextbotImages = [];
+        savedNextbotSounds = [];
+        
+        // Load nextbot images - use correct indexing
         let i = 1;
         while (i <= MAX_NEXTBOTS) {
             const file = await loadFile(`nextbot${i}`);
             if (file) {
-                // Create entry if it doesn't exist and it's not the first one
+                // Create entry if it doesn't exist
                 if (!document.getElementById(`nextbotImage${i}`) && i > 1) {
                     document.getElementById('add-nextbot-btn')?.click();
                 }
                 
+                // Store at correct index (i-1)
                 savedNextbotImages[i-1] = file;
+                
+                // Set the file input
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
                 const input = document.getElementById(`nextbotImage${i}`);
-                if (input) input.files = dataTransfer.files;
+                if (input) {
+                    input.files = dataTransfer.files;
+                    console.log(`Loaded image for nextbot ${i}`);
+                }
+            } else {
+                // Ensure array has null for empty slots
+                if (!savedNextbotImages[i-1]) {
+                    savedNextbotImages[i-1] = null;
+                }
             }
             
             const soundFile = await loadFile(`nextbotSound${i}`);
             if (soundFile) {
                 savedNextbotSounds[i-1] = soundFile;
+                
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(soundFile);
                 const input = document.getElementById(`nextbotSound${i}`);
-                if (input) input.files = dataTransfer.files;
+                if (input) {
+                    input.files = dataTransfer.files;
+                    console.log(`Loaded sound for nextbot ${i}`);
+                }
+            } else {
+                if (!savedNextbotSounds[i-1]) {
+                    savedNextbotSounds[i-1] = null;
+                }
             }
             
             i++;
@@ -293,7 +316,7 @@ async function loadSavedFiles() {
         }
         
         updatePlayButton();
-        console.log("Saved files loaded");
+        console.log("Saved files loaded successfully");
     } catch (e) {
         console.error("Failed to load saved files:", e);
     }
