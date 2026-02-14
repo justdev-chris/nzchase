@@ -72,10 +72,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     loadSavedSettings();
-    loadSavedFiles();
+    setupDynamicNextbots();   // must come BEFORE loadSavedFiles
+    loadSavedFiles();         // now the DOM exists
     setupEventListeners();
     setupAudioContext();
-    setupDynamicNextbots();
     updatePlayButton();
 });
 
