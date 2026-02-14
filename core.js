@@ -44,6 +44,7 @@ let savedBgMusic = null;
 let savedNextbotSounds = [];
 let saved3DMap = null;
 let autoFloorEnabled = true;
+let dbReady = false;
 
 // Collision
 let currentMapModel = null;
@@ -63,10 +64,134 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     loadSavedSettings();
+    loadSavedFiles();
     setupEventListeners();
     setupAudioContext();
     updatePlayButton();
 });
+
+// ========== INDEXEDDB FUNCTIONS ==========
+async function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('NZChaseDB', 1);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            db = request.result;
+            resolve();
+        };
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('savedFiles')) {
+                db.createObjectStore('savedFiles', { keyPath: 'id' });
+            }
+        };
+    });
+}
+
+async function saveFile(id, file) {
+    if (!db || !file) return;
+    
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const transaction = db.transaction(['savedFiles'], 'readwrite');
+            const store = transaction.objectStore('savedFiles');
+            
+            const fileData = {
+                id: id,
+                name: file.name,
+                type: file.type,
+                data: e.target.result,
+                timestamp: Date.now()
+            };
+            
+            store.put(fileData);
+            resolve();
+        };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+async function loadFile(id) {
+    if (!db) return null;
+    
+    return new Promise((resolve) => {
+        const transaction = db.transaction(['savedFiles'], 'readonly');
+        const store = transaction.objectStore('savedFiles');
+        const request = store.get(id);
+        
+        request.onsuccess = () => {
+            if (request.result) {
+                const fileData = request.result;
+                const blob = new Blob([fileData.data], { type: fileData.type });
+                const file = new File([blob], fileData.name, { type: fileData.type });
+                resolve(file);
+            } else {
+                resolve(null);
+            }
+        };
+        request.onerror = () => resolve(null);
+    });
+}
+
+async function clearAllFiles() {
+    if (!db) return;
+    
+    const transaction = db.transaction(['savedFiles'], 'readwrite');
+    const store = transaction.objectStore('savedFiles');
+    store.clear();
+}
+
+async function loadSavedFiles() {
+    try {
+        await initDB();
+        dbReady = true;
+        
+        // Load nextbot images
+        for (let i = 1; i <= 5; i++) {
+            const file = await loadFile(`nextbot${i}`);
+            if (file) {
+                savedNextbotImages[i-1] = file;
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                getElement(`nextbotImage${i}`).files = dataTransfer.files;
+            }
+            
+            const soundFile = await loadFile(`nextbotSound${i}`);
+            if (soundFile) {
+                savedNextbotSounds[i-1] = soundFile;
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(soundFile);
+                getElement(`nextbotSound${i}`).files = dataTransfer.files;
+            }
+        }
+        
+        // Load background music
+        const bgFile = await loadFile('bgMusic');
+        if (bgFile) {
+            savedBgMusic = bgFile;
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(bgFile);
+            getElement('bgMusic').files = dataTransfer.files;
+        }
+        
+        // Load map
+        const mapFile = await loadFile('map3d');
+        if (mapFile) {
+            saved3DMap = mapFile;
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(mapFile);
+            getElement('map3d').files = dataTransfer.files;
+        }
+        
+        updatePlayButton();
+        console.log("Saved files loaded");
+    } catch (e) {
+        console.error("Failed to load saved files:", e);
+    }
+}
 
 function loadSavedSettings() {
     const savedSettings = localStorage.getItem('nzchase_settings');
@@ -131,6 +256,7 @@ function saveSettings() {
 
 function clearSavedSettings() {
     localStorage.removeItem('nzchase_settings');
+    if (dbReady) clearAllFiles();
     
     getElement('playerSpeed').value = 100;
     getElement('jumpHeight').value = 100;
@@ -159,9 +285,10 @@ function setupEventListeners() {
     for (let i = 1; i <= 5; i++) {
         const imgInput = getElement(`nextbotImage${i}`);
         if (imgInput) {
-            imgInput.addEventListener('change', (e) => {
+            imgInput.addEventListener('change', async (e) => {
                 if (e.target.files[0]) {
                     savedNextbotImages[i-1] = e.target.files[0];
+                    if (dbReady) await saveFile(`nextbot${i}`, e.target.files[0]);
                 }
                 updatePlayButton();
             });
@@ -169,23 +296,26 @@ function setupEventListeners() {
         
         const soundInput = getElement(`nextbotSound${i}`);
         if (soundInput) {
-            soundInput.addEventListener('change', (e) => {
+            soundInput.addEventListener('change', async (e) => {
                 if (e.target.files[0]) {
                     savedNextbotSounds[i-1] = e.target.files[0];
+                    if (dbReady) await saveFile(`nextbotSound${i}`, e.target.files[0]);
                 }
             });
         }
     }
     
-    getElement('bgMusic').addEventListener('change', (e) => {
+    getElement('bgMusic').addEventListener('change', async (e) => {
         if (e.target.files[0]) {
             savedBgMusic = e.target.files[0];
+            if (dbReady) await saveFile('bgMusic', e.target.files[0]);
         }
     });
     
-    getElement('map3d').addEventListener('change', (e) => {
+    getElement('map3d').addEventListener('change', async (e) => {
         if (e.target.files[0]) {
             saved3DMap = e.target.files[0];
+            if (dbReady) await saveFile('map3d', e.target.files[0]);
         }
     });
     
@@ -414,11 +544,9 @@ function initGame(nextbotURLs) {
     
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111122);
-   // scene.fog = new THREE.Fog(0x111122, 30, 200);
+    scene.fog = new THREE.Fog(0x111122, 30, 200);
 
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
-    
-    // TEMP spawn - will be moved after map loads
     camera.position.set(0, floorY + 2, 0);
     camera.rotation.x = 0;
     lastPosition.copy(camera.position);
@@ -432,15 +560,17 @@ function initGame(nextbotURLs) {
 
     setupMouseControls();
 
-    const ambientLight = new THREE.AmbientLight(0x404060);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(50, 100, 50);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    directionalLight.position.set(100, 200, 100);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
+    
+    scene.background = new THREE.Color(0x87CEEB);
 
     if (saved3DMap) {
         load3DMap();
@@ -448,8 +578,6 @@ function initGame(nextbotURLs) {
         if (typeof generateMaze === 'function') {
             generateMaze(scene, mapColliders);
         }
-        // Maze spawn at center
-        camera.position.set(0, floorY + 2, 0);
     }
 
     if (typeof createAllNextbots === 'function') {
@@ -519,181 +647,72 @@ window.onkeyup = e => {
     }
 };
 
-function isPositionBlocked(position) {
-    if (mapColliders.length === 0) return false;
-    
-    const playerBox = new THREE.Box3(
-        new THREE.Vector3(position.x - 0.5, position.y - 1.8, position.z - 0.5),
-        new THREE.Vector3(position.x + 0.5, position.y + 0.2, position.z + 0.5)
-    );
-    
-    for (let collider of mapColliders) {
-        if (playerBox.intersectsBox(collider)) {
-            return true;
-        }
-    }
-    
-    return false;
-}
-
 function checkMapCollision(newPosition) {
-    if (mapColliders.length === 0) return false;
+    if (!currentMapModel) return false;
     
-    const playerBox = new THREE.Box3(
-        new THREE.Vector3(newPosition.x - 0.4, newPosition.y - 0.8, newPosition.z - 0.4),
-        new THREE.Vector3(newPosition.x + 0.4, newPosition.y + 1.8, newPosition.z + 0.4)
-    );
+    const dir = new THREE.Vector3().subVectors(newPosition, camera.position).normalize();
+    const distance = camera.position.distanceTo(newPosition);
     
-    for (let i = 0; i < mapColliders.length; i++) {
-        if (playerBox.intersectsBox(mapColliders[i])) {
-            return true;
-        }
-    }
+    const raycaster = new THREE.Raycaster(camera.position, dir, 0, distance + 1);
+    const intersects = raycaster.intersectObject(currentMapModel, true);
     
-    if (mapBounds) {
-        if (newPosition.x < mapBounds.min.x + 1 || newPosition.x > mapBounds.max.x - 1 ||
-            newPosition.z < mapBounds.min.z + 1 || newPosition.z > mapBounds.max.z - 1) {
-            return true;
-        }
-    }
-    
-    return false;
+    return intersects.length > 0;
 }
 
 function load3DMap() {
-    getElement('loading').textContent = 'Loading 3D Map...';
-    
-    const file = saved3DMap;
-    const fileExtension = file.name.split('.').pop().toLowerCase();
-    const objectURL = URL.createObjectURL(file);
-    
-    const onLoad = (model) => {
+    const loadingEl = getElement('loading');
+    loadingEl.textContent = 'Loading 3D Map...';
+
+    if (!saved3DMap) return;
+
+    const fileExtension = saved3DMap.name.split('.').pop().toLowerCase();
+    const objectURL = URL.createObjectURL(saved3DMap);
+
+    const onModelLoad = (model) => {
         model.scale.set(mapScale, mapScale, mapScale);
         
         const box = new THREE.Box3().setFromObject(model);
-        mapBounds = box;
-        
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
         
+        scene.add(model);
+        currentMapModel = model;
+        mapBounds = box;
+        
         if (autoFloorEnabled) {
             const size = box.getSize(new THREE.Vector3());
-            const floorSize = Math.max(size.x, size.z) * 1.5;
             const floor = new THREE.Mesh(
-                new THREE.PlaneGeometry(floorSize, floorSize),
-                new THREE.MeshLambertMaterial({ 
-                    color: 0x1a3c2e,
-                    side: THREE.DoubleSide
-                })
+                new THREE.PlaneGeometry(size.x * 2, size.z * 2),
+                new THREE.MeshLambertMaterial({ color: 0x1a3c2e, side: THREE.DoubleSide })
             );
-            floor.rotation.x = Math.PI / 2;
+            floor.rotation.x = -Math.PI / 2;
             floor.position.set(0, box.min.y - 0.1, 0);
             floor.receiveShadow = true;
             scene.add(floor);
         }
         
-        scene.add(model);
-        currentMapModel = model;
+        camera.position.set(0, 5, 0);
+        lastPosition.copy(camera.position);
         
-        // ===== SIMPLE COLLISION =====
-mapColliders = [];
+        URL.revokeObjectURL(objectURL);
+        loadingEl.textContent = 'Ready';
+    };
 
-model.traverse((child) => {
-    if (child.isMesh) {
-        const name = child.name.toLowerCase();
-        if (name.includes("collision") || name.includes("ucx") || name.includes("proxy")) {
-            return;
-        }
-        
-        child.castShadow = true;
-        child.receiveShadow = true;
-        
-        // Get the world position
-        const worldPos = new THREE.Vector3();
-        child.getWorldPosition(worldPos);
-        
-        // Get the original bounding box
-        child.geometry.computeBoundingBox();
-        const localBox = child.geometry.boundingBox.clone();
-        
-        // Create a new box at the world position with the same size
-        const size = localBox.getSize(new THREE.Vector3());
-        const worldBox = new THREE.Box3(
-            new THREE.Vector3(
-                worldPos.x - size.x/2,
-                worldPos.y - size.y/2,
-                worldPos.z - size.z/2
-            ),
-            new THREE.Vector3(
-                worldPos.x + size.x/2,
-                worldPos.y + size.y/2,
-                worldPos.z + size.z/2
-            )
-        );
-        
-        mapColliders.push(worldBox);
-        
-        // RED BOX
-        const helper = new THREE.Box3Helper(worldBox, 0xff0000);
-        scene.add(helper);
-    }
-});
-        
-        console.log("Created", mapColliders.length, "colliders");
-        
-        function findEmptySpot() {
-            if (!isPositionBlocked(new THREE.Vector3(0, floorY + 2, 0))) {
-                return new THREE.Vector3(0, floorY + 2, 0);
-            }
-            
-            for (let x = -500; x < 500; x += 50) {
-                for (let z = -500; z < 500; z += 50) {
-                    const testPos = new THREE.Vector3(x, floorY + 2, z);
-                    if (!isPositionBlocked(testPos)) {
-                        return testPos;
-                    }
-                }
-            }
-            
-            return new THREE.Vector3(0, 50, 0);
-        }
-        
-        const spawnPos = findEmptySpot();
-        camera.position.copy(spawnPos);
-        lastPosition.copy(spawnPos);
-        console.log("Spawned at:", spawnPos);
-        
-        getElement('loading').textContent = 'Loading...';
+    const onModelError = (err) => {
+        console.error("Load error:", err);
+        URL.revokeObjectURL(objectURL);
+        if (typeof generateMaze === 'function') generateMaze(scene, mapColliders);
+        loadingEl.textContent = 'Error';
     };
-    
-    const onError = (error) => {
-        console.error("Error loading 3D map:", error);
-        alert("Failed to load 3D map. Using random maze instead.");
-        if (typeof generateMaze === 'function') {
-            generateMaze(scene, mapColliders);
-        }
-        getElement('loading').textContent = 'Loading...';
-    };
-    
-    switch(fileExtension) {
-        case 'gltf':
-        case 'glb':
-            const gltfLoader = new THREE.GLTFLoader();
-            gltfLoader.load(objectURL, (gltf) => onLoad(gltf.scene), undefined, onError);
-            break;
-        case 'obj':
-            const objLoader = new THREE.OBJLoader();
-            objLoader.load(objectURL, onLoad, undefined, onError);
-            break;
-        case 'fbx':
-            const fbxLoader = new THREE.FBXLoader();
-            fbxLoader.load(objectURL, onLoad, undefined, onError);
-            break;
-        default:
-            alert("Unsupported 3D format. Using random maze.");
-            if (typeof generateMaze === 'function') {
-                generateMaze(scene, mapColliders);
-            }
+
+    if (fileExtension === 'gltf' || fileExtension === 'glb') {
+        new THREE.GLTFLoader().load(objectURL, (gltf) => onModelLoad(gltf.scene), undefined, onModelError);
+    } else if (fileExtension === 'obj') {
+        new THREE.OBJLoader().load(objectURL, (obj) => onModelLoad(obj), undefined, onModelError);
+    } else if (fileExtension === 'fbx') {
+        new THREE.FBXLoader().load(objectURL, (fbx) => onModelLoad(fbx), undefined, onModelError);
+    } else {
+        onModelError("Unsupported format");
     }
 }
 
@@ -728,14 +747,12 @@ function animate() {
         
         const oldPosition = camera.position.clone();
         
-        // Try X movement
         const newPositionX = camera.position.clone();
         newPositionX.x += velocity.x;
         if (!checkMapCollision(newPositionX)) {
             camera.position.x = newPositionX.x;
         }
         
-        // Try Z movement
         const newPositionZ = camera.position.clone();
         newPositionZ.z += velocity.z;
         if (!checkMapCollision(newPositionZ)) {
@@ -746,18 +763,29 @@ function animate() {
         getElement('speed').textContent = currentSpeed;
         
         playerVelocityY += gravity;
-        camera.position.y += playerVelocityY;
+        const newVerticalPos = camera.position.y + playerVelocityY;
         
-        const verticalCheckPos = camera.position.clone();
-        if (checkMapCollision(verticalCheckPos)) {
-            camera.position.y = oldPosition.y;
-            playerVelocityY = 0;
-            isOnGround = true;
-        } else if (camera.position.y <= floorY) {
-            camera.position.y = floorY;
+        const downRay = new THREE.Raycaster(
+            new THREE.Vector3(camera.position.x, camera.position.y + 1, camera.position.z),
+            new THREE.Vector3(0, -1, 0),
+            0,
+            5
+        );
+        
+        let groundY = -1000;
+        if (currentMapModel) {
+            const groundHits = downRay.intersectObject(currentMapModel, true);
+            if (groundHits.length > 0) {
+                groundY = groundHits[0].point.y;
+            }
+        }
+        
+        if (newVerticalPos <= groundY + 1.8) {
+            camera.position.y = groundY + 1.8;
             playerVelocityY = 0;
             isOnGround = true;
         } else {
+            camera.position.y = newVerticalPos;
             isOnGround = false;
         }
         
