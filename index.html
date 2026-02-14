@@ -14,51 +14,24 @@
             
             <div class="menu-section">
                 <h3><span class="required">* NEXTBOT COLLECTION *</span></h3>
-                <p>Add up to 5 nextbots with images and sounds:</p>
+                <p>Add up to 50 nextbots with images and sounds:</p>
                 
-                <!-- Nextbot 1 -->
-                <div class="nextbot-entry">
-                    <h4>Nextbot #1 (Required)</h4>
-                    <p>Image:</p>
-                    <input type="file" id="nextbotImage1" accept="image/*" class="file-input" required>
-                    <p>Sound (optional):</p>
-                    <input type="file" id="nextbotSound1" accept="audio/*" class="file-input">
-                </div>
-                
-                <!-- Nextbot 2 -->
-                <div class="nextbot-entry">
-                    <h4>Nextbot #2</h4>
-                    <p>Image:</p>
-                    <input type="file" id="nextbotImage2" accept="image/*" class="file-input">
-                    <p>Sound (optional):</p>
-                    <input type="file" id="nextbotSound2" accept="audio/*" class="file-input">
-                </div>
-                
-                <!-- Nextbot 3 -->
-                <div class="nextbot-entry">
-                    <h4>Nextbot #3</h4>
-                    <p>Image:</p>
-                    <input type="file" id="nextbotImage3" accept="image/*" class="file-input">
-                    <p>Sound (optional):</p>
-                    <input type="file" id="nextbotSound3" accept="audio/*" class="file-input">
-                </div>
-                
-                <!-- Nextbot 4 -->
-                <div class="nextbot-entry">
-                    <h4>Nextbot #4</h4>
-                    <p>Image:</p>
-                    <input type="file" id="nextbotImage4" accept="image/*" class="file-input">
-                    <p>Sound (optional):</p>
-                    <input type="file" id="nextbotSound4" accept="audio/*" class="file-input">
-                </div>
-                
-                <!-- Nextbot 5 -->
-                <div class="nextbot-entry">
-                    <h4>Nextbot #5</h4>
-                    <p>Image:</p>
-                    <input type="file" id="nextbotImage5" accept="image/*" class="file-input">
-                    <p>Sound (optional):</p>
-                    <input type="file" id="nextbotSound5" accept="audio/*" class="file-input">
+                <!-- Dynamic Nextbot Container -->
+                <div id="nextbot-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin:0;">Nextbots</h4>
+                        <button id="add-nextbot-btn" style="width: auto; padding: 5px 15px; margin:0;">+ Add Nextbot</button>
+                    </div>
+                    <div id="nextbot-list">
+                        <!-- Nextbot 1 (always exists) -->
+                        <div class="nextbot-entry" id="nextbot-1">
+                            <h4>Nextbot #1 <span style="color:#ff5555;">(Required)</span></h4>
+                            <p>Image:</p>
+                            <input type="file" id="nextbotImage1" accept="image/*" class="file-input" required>
+                            <p>Sound (optional):</p>
+                            <input type="file" id="nextbotSound1" accept="audio/*" class="file-input">
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -78,7 +51,6 @@
                 <p>Upload 3D Map (GLTF/GLB/OBJ/FBX):</p>
                 <input type="file" id="map3d" accept=".gltf,.glb,.obj,.fbx" class="file-input">
                
-                
                 <div class="slider-container">
                     <label>Map Scale: <span id="mapScaleValue">10.0x</span></label>
                     <input type="range" id="mapScale" min="0.1" max="20" value="10.0" step="0.1">
@@ -115,7 +87,7 @@
             <button id="clearMemoryBtn" style="background: #333; color: white;">Clear Saved Settings</button>
             
             <p class="instructions">
-                WASD: Move • Mouse: Look • SPACE: Jump • SHIFT: Sprint • ESC: Pause • P: Noclip mode • L: Save spawn
+                WASD: Move • Mouse: Look • SPACE: Jump • SHIFT: Sprint • ESC: Pause
             </p>
         </div>
     </div>
