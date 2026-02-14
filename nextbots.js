@@ -1,45 +1,44 @@
 // ========== NEXTBOTS.JS - NEXTBOT MANAGER ==========
 
 let nextbotSoundIntervals = [];
+let activeSounds = [];
 
 function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) {
-    console.log("Creating nextbots with URLs:", imageURLs.length);
+    console.log("Creating nextbots...");
     
     if (!imageURLs || imageURLs.length === 0) {
-        console.log("No nextbot images provided");
+        console.log("No nextbot images");
         return;
     }
     
     const texLoader = new THREE.TextureLoader();
     
     imageURLs.forEach((url, index) => {
-        console.log(`Loading nextbot ${index} from:`, url);
-        
         texLoader.load(url, 
-            // Success
             function(texture) {
-                console.log(`Texture ${index} loaded successfully`);
                 const aspect = texture.image.width / texture.image.height;
                 const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
                 const botMaterial = new THREE.MeshLambertMaterial({ 
                     map: texture, 
                     transparent: true,
-                    side: THREE.DoubleSide,
-                    emissive: 0x330000
+                    side: THREE.DoubleSide
                 });
                 
                 const bot = new THREE.Mesh(botGeometry, botMaterial);
                 
-                // Spawn in different positions around the map
-                const angle = (index / imageURLs.length) * Math.PI * 2;
-                const radius = 25 + Math.random() * 15;
+                // Spawn at random position
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 15 + Math.random() * 20;
                 bot.position.set(
                     Math.cos(angle) * radius,
-                    4,
+                    30,
                     Math.sin(angle) * radius
                 );
                 
-                console.log(`Bot ${index} positioned at:`, bot.position);
+                bot.userData = {
+                    soundIndex: index,
+                    lastSoundTime: 0
+                };
                 
                 bot.castShadow = true;
                 bot.receiveShadow = true;
@@ -47,96 +46,134 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                 
                 nextbotsArray.push(bot);
                 botVelocitiesArray.push(0);
-                console.log(`Bot ${index} added to scene, total:`, nextbotsArray.length);
+                console.log(`Bot ${index} spawned`);
             },
-            // Progress
             undefined,
-            // Error
             function(error) {
-                console.error(`Failed to load texture ${index}:`, error);
-                // Fallback to colored cube if image fails
-                console.log(`Using fallback cube for bot ${index}`);
-                const botGeometry = new THREE.BoxGeometry(4, 4, 4);
-                const botMaterial = new THREE.MeshLambertMaterial({ 
-                    color: [0xff3333, 0x33ff33, 0x3333ff, 0xffff33, 0xff33ff][index % 5]
-                });
+                console.log("Texture failed, using cube");
+                const botGeometry = new THREE.BoxGeometry(3, 3, 3);
+                const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff00ff });
                 const bot = new THREE.Mesh(botGeometry, botMaterial);
                 
-                const angle = (index / imageURLs.length) * Math.PI * 2;
-                const radius = 25 + Math.random() * 15;
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 15 + Math.random() * 20;
                 bot.position.set(
                     Math.cos(angle) * radius,
-                    2,
+                    30,
                     Math.sin(angle) * radius
                 );
                 
-                console.log(`Fallback bot ${index} positioned at:`, bot.position);
+                bot.userData = {
+                    soundIndex: index,
+                    lastSoundTime: 0
+                };
                 
-                bot.castShadow = true;
-                bot.receiveShadow = true;
                 scene.add(bot);
-                
                 nextbotsArray.push(bot);
                 botVelocitiesArray.push(0);
             }
         );
     });
     
-    console.log("Final nextbot count:", nextbotsArray.length);
     document.getElementById('nextbot-count').textContent = nextbotsArray.length;
 }
 
 function setupNextbotSounds() {
     console.log("Setting up nextbot sounds");
     
-    // Clear old intervals
+    // Clear any existing intervals
     nextbotSoundIntervals.forEach(interval => clearInterval(interval));
     nextbotSoundIntervals = [];
     
-    if (window.nextbotAudio && window.nextbotAudio.length > 0 && window.nextbots) {
-        console.log(`Setting up sounds for ${window.nextbots.length} bots`);
-        for (let i = 0; i < window.nextbots.length; i++) {
-            const interval = setInterval(() => {
-                if (!window.isPaused && !window.isDead && window.nextbots[i]) {
-                    playNextbotSound(i);
-                }
-            }, 8000 + Math.random() * 7000);
-            nextbotSoundIntervals.push(interval);
-        }
-    } else {
-        console.log("No sounds to set up");
-    }
+    // Check each bot every 2 seconds
+    const interval = setInterval(() => {
+        if (!window.nextbots || !window.nextbotAudio || !camera) return;
+        if (!audioContext || audioContext.state !== 'running') return;
+        
+        window.nextbots.forEach((bot, index) => {
+            if (!bot) return;
+            
+            const dist = bot.position.distanceTo(camera.position);
+            const now = Date.now();
+            
+            // Only play if within 20 units and not spamming (min 3 seconds between sounds)
+            if (dist <= 20 && (now - bot.userData.lastSoundTime) > 3000) {
+                playBotSound(bot, dist);
+            }
+        });
+    }, 2000);
+    
+    nextbotSoundIntervals.push(interval);
 }
 
-function playNextbotSound(botIndex) {
-    if (window.nextbotAudio && window.nextbotAudio.length > 0 && !window.isMuted && !window.isDead && window.audioContext) {
-        const soundIndex = botIndex < window.nextbotAudio.length ? botIndex : Math.floor(Math.random() * window.nextbotAudio.length);
-        const sound = window.nextbotAudio[soundIndex];
-        if (sound && sound.buffer) {
-            console.log(`Playing sound for bot ${botIndex}`);
-            const newSound = window.audioContext.createBufferSource();
-            newSound.buffer = sound.buffer;
-            newSound.connect(window.sfxGain);
-            newSound.start();
+function playBotSound(bot, distance) {
+    const soundIndex = bot.userData.soundIndex;
+    
+    if (soundIndex >= window.nextbotAudio.length || !window.nextbotAudio[soundIndex]) {
+        console.log(`No sound for bot ${soundIndex}`);
+        return;
+    }
+    
+    try {
+        const soundBuffer = window.nextbotAudio[soundIndex].buffer;
+        if (!soundBuffer) {
+            console.log(`No buffer for bot ${soundIndex}`);
+            return;
         }
+        
+        // Calculate volume based on distance
+        let volume = 0;
+        if (distance <= 10) {
+            volume = 1.0; // Full volume within 10 units
+        } else if (distance <= 16) {
+            volume = 0.6; // 60% volume at 11-16 units
+        } else {
+            volume = 0.0; // Silent beyond 20 units (already filtered)
+        }
+        
+        console.log(`Playing sound for bot ${soundIndex} at distance ${distance.toFixed(1)}, volume ${volume}`);
+        
+        // Create and play sound
+        const source = audioContext.createBufferSource();
+        source.buffer = soundBuffer;
+        
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = volume;
+        
+        source.connect(gainNode);
+        gainNode.connect(sfxGain);
+        
+        source.onended = () => {
+            // Remove from active sounds
+            activeSounds = activeSounds.filter(s => s.source !== source);
+        };
+        
+        source.start();
+        
+        // Track active sound
+        activeSounds.push({
+            source: source,
+            gainNode: gainNode,
+            bot: bot
+        });
+        
+        bot.userData.lastSoundTime = Date.now();
+        
+    } catch (e) {
+        console.error("Error playing sound:", e);
     }
 }
 
 function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSpeed, botSpeedMultiplier) {
     if (!window.nextbots || !window.botVelocities) {
-        // console.log("No nextbots to update");
         return;
     }
     
-    if (!window.currentMapModel) {
-        // console.log("No map model for collision");
-        return;
-    }
+    const mapModel = window.currentMapModel || currentMapModel;
+    if (!mapModel) return;
     
     const currentBotSpeed = baseBotSpeed * botSpeedMultiplier;
     const gravity = -0.03;
-    
-    // console.log(`Updating ${window.nextbots.length} nextbots`);
     
     window.nextbots.forEach((bot, index) => {
         if (!bot) return;
@@ -146,102 +183,59 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
         window.botVelocities[index] += gravity;
         bot.position.y += window.botVelocities[index];
         
-        if (bot.position.y <= 4) {
-            bot.position.y = 4;
+        // Ground collision
+        const downRay = new THREE.Raycaster(
+            new THREE.Vector3(bot.position.x, bot.position.y + 10, bot.position.z),
+            new THREE.Vector3(0, -1, 0),
+            0,
+            200
+        );
+        
+        const groundHits = downRay.intersectObject(mapModel, true);
+        
+        if (groundHits.length > 0) {
+            const groundY = groundHits[0].point.y;
+            const botHeight = 2;
+            
+            if (bot.position.y <= groundY + botHeight) {
+                bot.position.y = groundY + botHeight;
+                window.botVelocities[index] = 0;
+            }
+        } else if (bot.position.y < -50) {
+            bot.position.y = 10;
             window.botVelocities[index] = 0;
         }
         
-        const distanceToPlayer = bot.position.distanceTo(camera.position);
-        
-        // ===== WALL COLLISION FOR NEXTBOTS =====
+        // Move toward player
         const dir = new THREE.Vector3();
         dir.subVectors(camera.position, bot.position).normalize();
+        dir.y = 0;
         
-        // Raycast to see if there's a wall in the way
-        const botRay = new THREE.Raycaster(bot.position, dir, 0, distanceToPlayer);
-        const wallHits = botRay.intersectObject(window.currentMapModel, true);
-        
-        if (wallHits.length === 0 || wallHits[0].distance > distanceToPlayer - 2) {
-            // No wall or wall is behind player, move normally
-            let speed = currentBotSpeed;
-            
-            if (distanceToPlayer < 20) {
-                speed *= 2;
-            }
-            
-            if (Math.random() < 0.02) {
-                speed *= 3;
-            }
-            
-            dir.y = 0;
-            bot.position.add(dir.multiplyScalar(speed));
-            
-            // Jump randomly
-            if (Math.random() < 0.01 && bot.position.y <= 4.1) {
-                window.botVelocities[index] = 0.6;
-            }
-        } else {
-            // Wall in the way, try to go around
-            // console.log("Bot hit wall, going around");
-            
-            // Try left
-            const leftDir = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
-            const leftRay = new THREE.Raycaster(bot.position, leftDir, 0, 5);
-            const leftHits = leftRay.intersectObject(window.currentMapModel, true);
-            
-            // Try right
-            const rightDir = new THREE.Vector3(dir.z, 0, -dir.x).normalize();
-            const rightRay = new THREE.Raycaster(bot.position, rightDir, 0, 5);
-            const rightHits = rightRay.intersectObject(window.currentMapModel, true);
-            
-            if (leftHits.length === 0) {
-                // Left is clear
-                bot.position.add(leftDir.multiplyScalar(currentBotSpeed * 0.8));
-            } else if (rightHits.length === 0) {
-                // Right is clear
-                bot.position.add(rightDir.multiplyScalar(currentBotSpeed * 0.8));
-            } else {
-                // Both blocked, move backwards
-                const backDir = dir.clone().negate();
-                bot.position.add(backDir.multiplyScalar(currentBotSpeed * 0.5));
-            }
+        if (dir.length() > 0.1) {
+            bot.position.x += dir.x * currentBotSpeed;
+            bot.position.z += dir.z * currentBotSpeed;
         }
         
-        // Face the player
-        const targetLook = camera.position.clone();
-        targetLook.y = bot.position.y;
-        bot.lookAt(targetLook);
+        bot.lookAt(camera.position);
         
-        // Damage player if too close
-        if (distanceToPlayer < 4) {
-            console.log("BOT HIT PLAYER!");
+        // Insta-kill
+        const dist = bot.position.distanceTo(camera.position);
+        if (dist < 4) {
             window.playerHealth = 0;
             document.getElementById('health').textContent = '0';
-            
-            const shake = 2;
-            camera.position.x += (Math.random() - 0.5) * shake;
-            camera.position.z += (Math.random() - 0.5) * shake;
-            
-            document.getElementById("hud").style.color = '#ff0000';
-            setTimeout(() => {
-                document.getElementById("hud").style.color = 'white';
-            }, 100);
-            
-            if (!isDead) {
-                showDeathScreen();
-            }
-        }
-        
-        // Teleport if too far (reduced chance)
-        if (distanceToPlayer > 120 && Math.random() < 0.002) {
-            console.log("Teleporting bot", index);
-            const angle = Math.random() * Math.PI * 2;
-            const teleportDistance = 30 + Math.random() * 40;
-            bot.position.set(
-                camera.position.x + Math.cos(angle) * teleportDistance,
-                4,
-                camera.position.z + Math.sin(angle) * teleportDistance
-            );
+            if (!isDead) showDeathScreen();
         }
     });
+}
+
+function cleanupNextbotSounds() {
+    nextbotSoundIntervals.forEach(interval => clearInterval(interval));
+    nextbotSoundIntervals = [];
+    
+    activeSounds.forEach(sound => {
+        if (sound.source) {
+            try { sound.source.stop(); } catch (e) {}
+        }
+    });
+    activeSounds = [];
 }
