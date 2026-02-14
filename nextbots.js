@@ -1,6 +1,5 @@
 // ========== NEXTBOTS.JS - NEXTBOT MANAGER ==========
 
-let nextbotSoundIntervals = [];
 let activeSounds = new Map(); // Track active sounds per bot
 
 function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) {
@@ -35,20 +34,15 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                     Math.sin(angle) * radius
                 );
                 
-                // UNIQUE BOT PERSONALITY - each bot behaves differently
+                // Bot personality for varied paths
                 bot.userData = {
                     soundIndex: index,
                     lastSoundTime: 0,
                     isPlayingSound: false,
-                    
-                    // Movement personality traits
-                    aggression: 0.5 + Math.random() * 0.8, // 0.5-1.3 - how directly they chase
-                    wanderFreq: 0.5 + Math.random() * 2.0, // 0.5-2.5 - how fast they wander side to side
-                    wanderAmp: 0.2 + Math.random() * 0.8, // 0.2-1.0 - how wide they wander
-                    sideBias: (Math.random() - 0.5) * 1.5, // -0.75 to 0.75 - prefer left/right
-                    
-                    // Visual personality (optional)
-                    color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5) // For debug
+                    aggression: 0.5 + Math.random() * 0.8,
+                    wanderFreq: 0.5 + Math.random() * 2.0,
+                    wanderAmp: 0.2 + Math.random() * 0.8,
+                    sideBias: (Math.random() - 0.5) * 1.5
                 };
                 
                 bot.castShadow = true;
@@ -57,7 +51,7 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                 
                 nextbotsArray.push(bot);
                 botVelocitiesArray.push(0);
-                console.log(`Bot ${index} spawned with aggression ${bot.userData.aggression.toFixed(2)}`);
+                console.log(`Bot ${index} spawned`);
             },
             undefined,
             function(error) {
@@ -99,6 +93,13 @@ function setupNextbotSounds() {
     activeSounds.clear();
 }
 
+function calculateVolume(distance) {
+    if (distance <= 30) return 1.0;
+    if (distance <= 45) return 0.6;
+    if (distance <= 60) return 0.6 * (1 - (distance - 45) / 15);
+    return 0.0;
+}
+
 function playBotSoundIfClose(bot, camera) {
     const soundIndex = bot.userData.soundIndex;
     
@@ -114,7 +115,7 @@ function playBotSoundIfClose(bot, camera) {
     const now = Date.now();
     const timeSinceLastSound = now - bot.userData.lastSoundTime;
     
-    if (dist2D <= 20 && timeSinceLastSound > 3000) {
+    if (dist2D <= 60 && timeSinceLastSound > 3000) {
         if (soundIndex >= window.nextbotAudio.length || !window.nextbotAudio[soundIndex]) {
             return;
         }
@@ -165,13 +166,6 @@ function playBotSoundIfClose(bot, camera) {
     }
 }
 
-function calculateVolume(distance) {
-    if (distance <= 10) return 1.0;
-    if (distance <= 16) return 0.6;
-    if (distance <= 20) return 0.6 * (1 - (distance - 16) / 4);
-    return 0.0;
-}
-
 function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSpeed, botSpeedMultiplier) {
     if (!window.nextbots || !window.botVelocities) {
         return;
@@ -198,12 +192,7 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
             // Update gain node volume
             const newVolume = calculateVolume(dist2D);
             soundData.gainNode.gain.value = newVolume;
-            
-            // Log if volume changed significantly
-            if (Math.abs(newVolume - soundData.lastVolume) > 0.1) {
-                console.log(`Bot ${index} volume updated to ${newVolume.toFixed(2)} at distance ${dist2D.toFixed(1)}`);
-                soundData.lastVolume = newVolume;
-            }
+            soundData.lastVolume = newVolume;
         } else {
             // Only try to play new sounds if not already playing
             playBotSoundIfClose(bot, camera);
@@ -237,7 +226,7 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
             window.botVelocities[index] = 0;
         }
         
-        // === UNIQUE PATHS FOR EACH BOT ===
+        // === MOVEMENT WITH BOT REPULSION ===
         
         // Direction to player
         const dirToPlayer = new THREE.Vector3();
@@ -249,33 +238,63 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
         if (distanceToPlayer > 1) {
             dirToPlayer.normalize();
             
-            // Each bot has unique wandering pattern based on their personality
-            const time = Date.now() * 0.002; // Slow oscillation
-            
-            // Combine multiple factors for unique paths:
-            // 1. Sine wave with unique frequency
+            // Calculate wander
+            const time = Date.now() * 0.002;
             const wander1 = Math.sin(time * bot.userData.wanderFreq + bot.userData.sideBias) * bot.userData.wanderAmp;
-            
-            // 2. Secondary oscillation for more complex patterns
             const wander2 = Math.cos(time * (bot.userData.wanderFreq * 0.5) + bot.userData.sideBias * 2) * (bot.userData.wanderAmp * 0.5);
-            
-            // 3. Permanent side bias (some bots always drift left/right)
             const bias = bot.userData.sideBias * 0.3;
-            
-            // Combine wander amounts
             const totalWander = wander1 + wander2 + bias;
             
-            // Create perpendicular direction
             const perpDir = new THREE.Vector3(-dirToPlayer.z, 0, dirToPlayer.x);
             
-            // Calculate movement direction
+            // Base movement toward player with wander
             const moveDir = new THREE.Vector3();
-            
-            // Aggression determines how directly they chase vs wander
-            // High aggression = more toward player, low aggression = more wandering
             moveDir.copy(dirToPlayer);
             moveDir.x += perpDir.x * totalWander * (1.5 - bot.userData.aggression);
             moveDir.z += perpDir.z * totalWander * (1.5 - bot.userData.aggression);
+            
+            // === BOT REPULSION - KEEP THEM APART ===
+            const repulsionRadius = 10;
+            const repulsionStrength = 0.8;
+            
+            let repulsionX = 0;
+            let repulsionZ = 0;
+            let repulsionCount = 0;
+            
+            window.nextbots.forEach((otherBot, otherIndex) => {
+                if (otherIndex === index || !otherBot) return;
+                
+                const dx = bot.position.x - otherBot.position.x;
+                const dz = bot.position.z - otherBot.position.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                
+                if (dist < repulsionRadius) {
+                    const force = Math.pow(1 - dist/repulsionRadius, 2) * repulsionStrength;
+                    if (dist > 0.1) {
+                        repulsionX += (dx / dist) * force;
+                        repulsionZ += (dz / dist) * force;
+                    } else {
+                        const randomAngle = Math.random() * Math.PI * 2;
+                        repulsionX += Math.cos(randomAngle) * repulsionStrength;
+                        repulsionZ += Math.sin(randomAngle) * repulsionStrength;
+                    }
+                    repulsionCount++;
+                }
+            });
+            
+            if (repulsionCount > 0) {
+                moveDir.x += repulsionX * 2;
+                moveDir.z += repulsionZ * 2;
+            }
+            
+            // Spread around player when close
+            if (distanceToPlayer < 5) {
+                const angleToPlayer = Math.atan2(dirToPlayer.z, dirToPlayer.x);
+                const spreadAngle = angleToPlayer + (index * 1.5);
+                moveDir.x += Math.cos(spreadAngle) * 0.5;
+                moveDir.z += Math.sin(spreadAngle) * 0.5;
+            }
+            
             moveDir.normalize();
             
             // Apply speed
@@ -283,7 +302,6 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
             bot.position.z += moveDir.z * currentBotSpeed;
         }
         
-        // Face player
         bot.lookAt(camera.position);
         
         // Insta-kill
@@ -297,9 +315,6 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
 }
 
 function cleanupNextbotSounds() {
-    nextbotSoundIntervals.forEach(interval => clearInterval(interval));
-    nextbotSoundIntervals = [];
-    
     activeSounds.forEach((soundData, bot) => {
         if (soundData.source) {
             try { soundData.source.stop(); } catch (e) {}
