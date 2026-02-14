@@ -3,73 +3,98 @@
 let nextbotSoundIntervals = [];
 
 function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) {
-    if (!imageURLs || imageURLs.length === 0) return;
+    console.log("Creating nextbots with URLs:", imageURLs.length);
+    
+    if (!imageURLs || imageURLs.length === 0) {
+        console.log("No nextbot images provided");
+        return;
+    }
     
     const texLoader = new THREE.TextureLoader();
     
     imageURLs.forEach((url, index) => {
-        texLoader.load(url, function(texture) {
-            const aspect = texture.image.width / texture.image.height;
-            const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
-            const botMaterial = new THREE.MeshLambertMaterial({ 
-                map: texture, 
-                transparent: true,
-                side: THREE.DoubleSide,
-                emissive: 0x330000
-            });
-            
-            const bot = new THREE.Mesh(botGeometry, botMaterial);
-            
-            // Spawn in different positions around the map
-            const angle = (index / imageURLs.length) * Math.PI * 2;
-            const radius = 25 + Math.random() * 15;
-            bot.position.set(
-                Math.cos(angle) * radius,
-                4,
-                Math.sin(angle) * radius
-            );
-            
-            bot.castShadow = true;
-            bot.receiveShadow = true;
-            scene.add(bot);
-            
-            nextbotsArray.push(bot);
-            botVelocitiesArray.push(0);
-            
-        }, undefined, function(error) {
-            // Fallback to colored cube if image fails
-            const botGeometry = new THREE.BoxGeometry(4, 4, 4);
-            const botMaterial = new THREE.MeshLambertMaterial({ 
-                color: [0xff3333, 0x33ff33, 0x3333ff, 0xffff33, 0xff33ff][index % 5]
-            });
-            const bot = new THREE.Mesh(botGeometry, botMaterial);
-            
-            const angle = (index / imageURLs.length) * Math.PI * 2;
-            const radius = 25 + Math.random() * 15;
-            bot.position.set(
-                Math.cos(angle) * radius,
-                2,
-                Math.sin(angle) * radius
-            );
-            
-            bot.castShadow = true;
-            bot.receiveShadow = true;
-            scene.add(bot);
-            
-            nextbotsArray.push(bot);
-            botVelocitiesArray.push(0);
-        });
+        console.log(`Loading nextbot ${index} from:`, url);
+        
+        texLoader.load(url, 
+            // Success
+            function(texture) {
+                console.log(`Texture ${index} loaded successfully`);
+                const aspect = texture.image.width / texture.image.height;
+                const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
+                const botMaterial = new THREE.MeshLambertMaterial({ 
+                    map: texture, 
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    emissive: 0x330000
+                });
+                
+                const bot = new THREE.Mesh(botGeometry, botMaterial);
+                
+                // Spawn in different positions around the map
+                const angle = (index / imageURLs.length) * Math.PI * 2;
+                const radius = 25 + Math.random() * 15;
+                bot.position.set(
+                    Math.cos(angle) * radius,
+                    4,
+                    Math.sin(angle) * radius
+                );
+                
+                console.log(`Bot ${index} positioned at:`, bot.position);
+                
+                bot.castShadow = true;
+                bot.receiveShadow = true;
+                scene.add(bot);
+                
+                nextbotsArray.push(bot);
+                botVelocitiesArray.push(0);
+                console.log(`Bot ${index} added to scene, total:`, nextbotsArray.length);
+            },
+            // Progress
+            undefined,
+            // Error
+            function(error) {
+                console.error(`Failed to load texture ${index}:`, error);
+                // Fallback to colored cube if image fails
+                console.log(`Using fallback cube for bot ${index}`);
+                const botGeometry = new THREE.BoxGeometry(4, 4, 4);
+                const botMaterial = new THREE.MeshLambertMaterial({ 
+                    color: [0xff3333, 0x33ff33, 0x3333ff, 0xffff33, 0xff33ff][index % 5]
+                });
+                const bot = new THREE.Mesh(botGeometry, botMaterial);
+                
+                const angle = (index / imageURLs.length) * Math.PI * 2;
+                const radius = 25 + Math.random() * 15;
+                bot.position.set(
+                    Math.cos(angle) * radius,
+                    2,
+                    Math.sin(angle) * radius
+                );
+                
+                console.log(`Fallback bot ${index} positioned at:`, bot.position);
+                
+                bot.castShadow = true;
+                bot.receiveShadow = true;
+                scene.add(bot);
+                
+                nextbotsArray.push(bot);
+                botVelocitiesArray.push(0);
+            }
+        );
     });
     
+    console.log("Final nextbot count:", nextbotsArray.length);
     document.getElementById('nextbot-count').textContent = nextbotsArray.length;
 }
 
 function setupNextbotSounds() {
+    console.log("Setting up nextbot sounds");
+    
     // Clear old intervals
     nextbotSoundIntervals.forEach(interval => clearInterval(interval));
     nextbotSoundIntervals = [];
     
     if (window.nextbotAudio && window.nextbotAudio.length > 0 && window.nextbots) {
+        console.log(`Setting up sounds for ${window.nextbots.length} bots`);
         for (let i = 0; i < window.nextbots.length; i++) {
             const interval = setInterval(() => {
                 if (!window.isPaused && !window.isDead && window.nextbots[i]) {
@@ -78,6 +103,8 @@ function setupNextbotSounds() {
             }, 8000 + Math.random() * 7000);
             nextbotSoundIntervals.push(interval);
         }
+    } else {
+        console.log("No sounds to set up");
     }
 }
 
@@ -86,6 +113,7 @@ function playNextbotSound(botIndex) {
         const soundIndex = botIndex < window.nextbotAudio.length ? botIndex : Math.floor(Math.random() * window.nextbotAudio.length);
         const sound = window.nextbotAudio[soundIndex];
         if (sound && sound.buffer) {
+            console.log(`Playing sound for bot ${botIndex}`);
             const newSound = window.audioContext.createBufferSource();
             newSound.buffer = sound.buffer;
             newSound.connect(window.sfxGain);
@@ -95,10 +123,20 @@ function playNextbotSound(botIndex) {
 }
 
 function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSpeed, botSpeedMultiplier) {
-    if (!window.nextbots || !window.botVelocities || !window.currentMapModel) return;
+    if (!window.nextbots || !window.botVelocities) {
+        // console.log("No nextbots to update");
+        return;
+    }
+    
+    if (!window.currentMapModel) {
+        // console.log("No map model for collision");
+        return;
+    }
     
     const currentBotSpeed = baseBotSpeed * botSpeedMultiplier;
     const gravity = -0.03;
+    
+    // console.log(`Updating ${window.nextbots.length} nextbots`);
     
     window.nextbots.forEach((bot, index) => {
         if (!bot) return;
@@ -144,7 +182,7 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
             }
         } else {
             // Wall in the way, try to go around
-            console.log("Bot hit wall, going around");
+            // console.log("Bot hit wall, going around");
             
             // Try left
             const leftDir = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
@@ -176,6 +214,7 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
         
         // Damage player if too close
         if (distanceToPlayer < 4) {
+            console.log("BOT HIT PLAYER!");
             window.playerHealth = 0;
             document.getElementById('health').textContent = '0';
             
@@ -195,6 +234,7 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
         
         // Teleport if too far (reduced chance)
         if (distanceToPlayer > 120 && Math.random() < 0.002) {
+            console.log("Teleporting bot", index);
             const angle = Math.random() * Math.PI * 2;
             const teleportDistance = 30 + Math.random() * 40;
             bot.position.set(
