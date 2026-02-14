@@ -45,11 +45,19 @@ let savedNextbotSounds = [];
 let saved3DMap = null;
 let autoFloorEnabled = true;
 let dbReady = false;
+let db = null;
 
 // Collision
 let currentMapModel = null;
 let mapColliders = [];
 let mapBounds = null;
+
+// Memory management
+let objectURLs = [];
+
+// Dynamic nextbot count
+let nextbotCount = 1;
+const MAX_NEXTBOTS = 50;
 
 // UI helper
 function getElement(id) {
@@ -67,8 +75,96 @@ document.addEventListener('DOMContentLoaded', function() {
     loadSavedFiles();
     setupEventListeners();
     setupAudioContext();
+    setupDynamicNextbots();
     updatePlayButton();
 });
+
+// ========== DYNAMIC NEXTBOT UI ==========
+function setupDynamicNextbots() {
+    const addBtn = document.getElementById('add-nextbot-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            if (nextbotCount >= MAX_NEXTBOTS) {
+                alert(`Maximum ${MAX_NEXTBOTS} nextbots reached!`);
+                return;
+            }
+            
+            nextbotCount++;
+            const container = document.getElementById('nextbot-list');
+            
+            const entry = document.createElement('div');
+            entry.className = 'nextbot-entry';
+            entry.id = `nextbot-${nextbotCount}`;
+            
+            entry.innerHTML = `
+                <h3>Nextbot ${nextbotCount} 
+                    ${nextbotCount > 1 ? '<button onclick="removeNextbot(' + nextbotCount + ')" class="remove-btn">✖</button>' : ''}
+                </h3>
+                <label>Image:</label>
+                <input type="file" id="nextbotImage${nextbotCount}" accept="image/*">
+                <label>Sound:</label>
+                <input type="file" id="nextbotSound${nextbotCount}" accept="audio/*">
+                <hr>
+            `;
+            
+            container.appendChild(entry);
+            
+            // Add event listeners
+            document.getElementById(`nextbotImage${nextbotCount}`).addEventListener('change', async (e) => {
+                if (e.target.files[0]) {
+                    savedNextbotImages[nextbotCount-1] = e.target.files[0];
+                    if (dbReady) await saveFile(`nextbot${nextbotCount}`, e.target.files[0]);
+                }
+                updatePlayButton();
+            });
+            
+            document.getElementById(`nextbotSound${nextbotCount}`).addEventListener('change', async (e) => {
+                if (e.target.files[0]) {
+                    savedNextbotSounds[nextbotCount-1] = e.target.files[0];
+                    if (dbReady) await saveFile(`nextbotSound${nextbotCount}`, e.target.files[0]);
+                }
+            });
+        });
+    }
+}
+
+// Make remove function global
+window.removeNextbot = function(num) {
+    if (num === 1) {
+        alert("Cannot remove first nextbot!");
+        return;
+    }
+    
+    const entry = document.getElementById(`nextbot-${num}`);
+    if (entry) {
+        entry.remove();
+        
+        // Clear saved data
+        if (savedNextbotImages[num-1]) savedNextbotImages[num-1] = null;
+        if (savedNextbotSounds[num-1]) savedNextbotSounds[num-1] = null;
+        
+        // Renumber remaining entries
+        const entries = document.querySelectorAll('.nextbot-entry');
+        nextbotCount = entries.length;
+        
+        entries.forEach((entry, index) => {
+            const newNum = index + 1;
+            entry.id = `nextbot-${newNum}`;
+            
+            // Update heading
+            const heading = entry.querySelector('h3');
+            const removeBtn = newNum > 1 ? `<button onclick="removeNextbot(${newNum})" class="remove-btn">✖</button>` : '';
+            heading.innerHTML = `Nextbot ${newNum} ${removeBtn}`;
+            
+            // Update input IDs
+            const imgInput = entry.querySelector('input[type="file"]:first-of-type');
+            const soundInput = entry.querySelector('input[type="file"]:last-of-type');
+            
+            if (imgInput) imgInput.id = `nextbotImage${newNum}`;
+            if (soundInput) soundInput.id = `nextbotSound${newNum}`;
+        });
+    }
+};
 
 // ========== INDEXEDDB FUNCTIONS ==========
 async function initDB() {
@@ -149,14 +245,21 @@ async function loadSavedFiles() {
         await initDB();
         dbReady = true;
         
-        // Load nextbot images
-        for (let i = 1; i <= 5; i++) {
+        // Load nextbot images - loop until no more files
+        let i = 1;
+        while (i <= MAX_NEXTBOTS) {
             const file = await loadFile(`nextbot${i}`);
             if (file) {
+                // Create entry if it doesn't exist and it's not the first one
+                if (!document.getElementById(`nextbotImage${i}`) && i > 1) {
+                    document.getElementById('add-nextbot-btn')?.click();
+                }
+                
                 savedNextbotImages[i-1] = file;
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
-                getElement(`nextbotImage${i}`).files = dataTransfer.files;
+                const input = document.getElementById(`nextbotImage${i}`);
+                if (input) input.files = dataTransfer.files;
             }
             
             const soundFile = await loadFile(`nextbotSound${i}`);
@@ -164,8 +267,11 @@ async function loadSavedFiles() {
                 savedNextbotSounds[i-1] = soundFile;
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(soundFile);
-                getElement(`nextbotSound${i}`).files = dataTransfer.files;
+                const input = document.getElementById(`nextbotSound${i}`);
+                if (input) input.files = dataTransfer.files;
             }
+            
+            i++;
         }
         
         // Load background music
@@ -281,29 +387,7 @@ function clearSavedSettings() {
 }
 
 function setupEventListeners() {
-    // Nextbot 1-5 image inputs
-    for (let i = 1; i <= 5; i++) {
-        const imgInput = getElement(`nextbotImage${i}`);
-        if (imgInput) {
-            imgInput.addEventListener('change', async (e) => {
-                if (e.target.files[0]) {
-                    savedNextbotImages[i-1] = e.target.files[0];
-                    if (dbReady) await saveFile(`nextbot${i}`, e.target.files[0]);
-                }
-                updatePlayButton();
-            });
-        }
-        
-        const soundInput = getElement(`nextbotSound${i}`);
-        if (soundInput) {
-            soundInput.addEventListener('change', async (e) => {
-                if (e.target.files[0]) {
-                    savedNextbotSounds[i-1] = e.target.files[0];
-                    if (dbReady) await saveFile(`nextbotSound${i}`, e.target.files[0]);
-                }
-            });
-        }
-    }
+    // Nextbot inputs are handled by dynamic UI
     
     getElement('bgMusic').addEventListener('change', async (e) => {
         if (e.target.files[0]) {
@@ -377,8 +461,18 @@ function setupEventListeners() {
 }
 
 function updatePlayButton() {
-    const hasFirstImage = getElement('nextbotImage1').files && getElement('nextbotImage1').files[0];
-    getElement('playBtn').disabled = !hasFirstImage;
+    // Check if at least one nextbot has an image
+    let hasImage = false;
+    let i = 1;
+    while (document.getElementById(`nextbotImage${i}`)) {
+        const input = document.getElementById(`nextbotImage${i}`);
+        if (input && input.files && input.files[0]) {
+            hasImage = true;
+            break;
+        }
+        i++;
+    }
+    getElement('playBtn').disabled = !hasImage;
 }
 
 function setupAudioContext() {
@@ -406,12 +500,33 @@ async function startGame() {
     try {
         saveSettings();
         
+        // Clear previous object URLs
+        objectURLs.forEach(url => URL.revokeObjectURL(url));
+        objectURLs = [];
+        
+        // Collect all nextbot images
         let nextbotURLs = [];
-        for (let i = 1; i <= 5; i++) {
-            const imgInput = getElement(`nextbotImage${i}`);
+        let i = 1;
+        while (document.getElementById(`nextbotImage${i}`)) {
+            const imgInput = document.getElementById(`nextbotImage${i}`);
             if (imgInput && imgInput.files && imgInput.files[0]) {
-                nextbotURLs.push(URL.createObjectURL(imgInput.files[0]));
+                const url = URL.createObjectURL(imgInput.files[0]);
+                nextbotURLs.push(url);
+                objectURLs.push(url);
             }
+            i++;
+        }
+        
+        console.log(`Starting game with ${nextbotURLs.length} nextbots`);
+        
+        if (nextbotURLs.length === 0) {
+            alert("Please add at least one nextbot image!");
+            getElement('loading').style.display = 'none';
+            return;
+        }
+        
+        if (audioContext && audioContext.state === 'suspended') {
+            await audioContext.resume();
         }
         
         await loadAudioFiles();
@@ -445,12 +560,14 @@ async function loadAudioFiles() {
     }
     
     window.nextbotAudio = [];
-    for (let i = 1; i <= 5; i++) {
-        const soundInput = getElement(`nextbotSound${i}`);
+    let i = 1;
+    while (document.getElementById(`nextbotSound${i}`)) {
+        const soundInput = document.getElementById(`nextbotSound${i}`);
         if (soundInput && soundInput.files && soundInput.files[0]) {
             const sound = await loadAudioFile(soundInput.files[0], sfxGain);
             if (sound) window.nextbotAudio.push(sound);
         }
+        i++;
     }
 }
 
@@ -519,6 +636,8 @@ function showDeathScreen() {
 }
 
 function returnToMenu() {
+    // Clean up
+    objectURLs.forEach(url => URL.revokeObjectURL(url));
     location.reload();
 }
 
@@ -571,18 +690,14 @@ function initGame(nextbotURLs) {
     
     scene.background = new THREE.Color(0x87CEEB);
 
-    // Load map FIRST, then nextbots will be created INSIDE the load function
+    // Load map
     if (saved3DMap) {
-        load3DMap(nextbotURLs); // Pass nextbot URLs to load function
+        load3DMap(nextbotURLs);
     } else {
-        // Load default map if no map uploaded
         if (typeof loadDefaultMap === 'function') {
             loadDefaultMap(scene, mapColliders, camera, nextbotURLs);
-        } else {
-            // If no default map function, create nextbots anyway
-            if (typeof createAllNextbots === 'function') {
-                createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
-            }
+        } else if (typeof createAllNextbots === 'function') {
+            createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
         }
     }
 
@@ -592,7 +707,6 @@ function initGame(nextbotURLs) {
 
     animate();
 }
-
 
 function setupMouseControls() {
     const canvas = renderer.domElement;
@@ -670,6 +784,7 @@ function load3DMap(nextbotURLs) {
 
     const fileExtension = saved3DMap.name.split('.').pop().toLowerCase();
     const objectURL = URL.createObjectURL(saved3DMap);
+    objectURLs.push(objectURL);
 
     const onModelLoad = (model) => {
         model.scale.set(mapScale, mapScale, mapScale);
@@ -678,7 +793,6 @@ function load3DMap(nextbotURLs) {
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
         
-        // GET FLOOR HEIGHT
         const floorY = box.min.y;
         console.log("Map floor at y:", floorY);
         
@@ -699,12 +813,10 @@ function load3DMap(nextbotURLs) {
             scene.add(floor);
         }
         
-        // SPAWN ON FLOOR
-        camera.position.set(0, floorY + 5, 0);
+        camera.position.set(0, floorY + 2, 0);
         lastPosition.copy(camera.position);
         console.log("Spawned at y:", camera.position.y);
         
-        // Create nextbots AFTER map is loaded
         if (typeof createAllNextbots === 'function') {
             createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
         }
@@ -718,7 +830,6 @@ function load3DMap(nextbotURLs) {
         URL.revokeObjectURL(objectURL);
         loadingEl.textContent = 'Error';
         
-        // Still create nextbots even if map fails
         if (typeof createAllNextbots === 'function') {
             createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
         }
@@ -764,8 +875,6 @@ function animate() {
             velocity.normalize().multiplyScalar(maxSpeed);
         }
         
-        const oldPosition = camera.position.clone();
-        
         const newPositionX = camera.position.clone();
         newPositionX.x += velocity.x;
         if (!checkMapCollision(newPositionX)) {
@@ -784,7 +893,6 @@ function animate() {
         playerVelocityY += gravity;
         const newVerticalPos = camera.position.y + playerVelocityY;
         
-        // Ground detection
         let groundY = -1000;
         
         if (currentMapModel) {
@@ -796,16 +904,10 @@ function animate() {
             );
             
             const groundHits = downRay.intersectObject(currentMapModel, true);
-            console.log("Player ground hits:", groundHits.length);
             
             if (groundHits.length > 0) {
                 groundY = groundHits[0].point.y;
-                console.log("Player ground at:", groundY);
             }
-        } else {
-            // No map yet, don't fall
-            groundY = camera.position.y;
-            console.log("No map loaded yet");
         }
         
         if (newVerticalPos <= groundY + 1.8) {
@@ -841,7 +943,6 @@ function animate() {
         renderer.render(scene, camera);
     }
 }
-
 
 window.onresize = () => {
     if (camera && renderer) {
