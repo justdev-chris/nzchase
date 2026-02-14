@@ -15,7 +15,6 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
     imageURLs.forEach((url, index) => {
         const createBotWithTexture = (texture) => {
             if (!texture) {
-                // Fallback to cube if texture failed
                 createFallbackBot(index, scene, nextbotsArray, botVelocitiesArray);
                 return;
             }
@@ -87,6 +86,7 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
             scene.add(bot);
             botsArray.push(bot);
             velocitiesArray.push(0);
+            console.log(`Bot ${idx} spawned as fallback cube`);
         };
         
         // Check if it's a GIF
@@ -95,19 +95,27 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                       THREE.GifTexture.isGif(url)) || 
                       url.toLowerCase().includes('.gif');
         
-        if (isGif && hasGifSupport) {
+        if (isGif && hasGifSupport && typeof THREE.GifTexture !== 'undefined') {
             // Load as GIF
+            console.log(`Loading GIF for bot ${index}:`, url);
             THREE.GifTexture(url, (texture) => {
-                createBotWithTexture(texture);
+                if (texture) {
+                    createBotWithTexture(texture);
+                } else {
+                    createFallbackBot(index, scene, nextbotsArray, botVelocitiesArray);
+                }
             });
         } else {
             // Load as regular texture
             const texLoader = new THREE.TextureLoader();
             texLoader.load(url, 
-                (texture) => createBotWithTexture(texture),
+                (texture) => {
+                    console.log(`Loaded static image for bot ${index}`);
+                    createBotWithTexture(texture);
+                },
                 undefined,
                 (error) => {
-                    console.log("Texture failed, using cube");
+                    console.log(`Texture failed for bot ${index}, using cube`);
                     createFallbackBot(index, scene, nextbotsArray, botVelocitiesArray);
                 }
             );
