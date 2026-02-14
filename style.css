@@ -291,3 +291,39 @@ input[type="range"] {
 .nextbot-entry .file-input {
     margin: 5px 0;
 }
+
+/* Add to your existing CSS */
+#nextbot-container {
+    width: 100%;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+#add-nextbot-btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#add-nextbot-btn:hover {
+    background: #45a049;
+}
+
+.remove-btn {
+    background: none;
+    border: none;
+    color: #ff5555;
+    cursor: pointer;
+    font-size: 16px;
+    margin-left: 10px;
+}
+
+.remove-btn:hover {
+    color: #ff0000;
+}
