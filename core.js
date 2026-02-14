@@ -106,122 +106,30 @@ function setupDynamicNextbots() {
             `;
             
             container.appendChild(entry);
-            
-            // Add event listeners
-            document.getElementById(`nextbotImage${nextbotCount}`).addEventListener('change', async (e) => {
+
+            // ⭐ FREEZE THE INDEX — this is the fix ⭐
+            const index = nextbotCount;
+
+            // Image listener
+            document.getElementById(`nextbotImage${index}`).addEventListener('change', async (e) => {
                 if (e.target.files[0]) {
-                    savedNextbotImages[nextbotCount-1] = e.target.files[0];
-                    if (dbReady) await saveFile(`nextbot${nextbotCount}`, e.target.files[0]);
+                    savedNextbotImages[index - 1] = e.target.files[0];
+                    if (dbReady) await saveFile(`nextbot${index}`, e.target.files[0]);
                 }
                 updatePlayButton();
             });
-            
-            document.getElementById(`nextbotSound${nextbotCount}`).addEventListener('change', async (e) => {
+
+            // Sound listener
+            document.getElementById(`nextbotSound${index}`).addEventListener('change', async (e) => {
                 if (e.target.files[0]) {
-                    savedNextbotSounds[nextbotCount-1] = e.target.files[0];
-                    if (dbReady) await saveFile(`nextbotSound${nextbotCount}`, e.target.files[0]);
+                    savedNextbotSounds[index - 1] = e.target.files[0];
+                    if (dbReady) await saveFile(`nextbotSound${index}`, e.target.files[0]);
                 }
             });
         });
     }
 }
 
-window.removeNextbot = function(num) {
-    if (num === 1) {
-        alert("Cannot remove first nextbot!");
-        return;
-    }
-
-    // Shift saved arrays so indices match new numbering
-    savedNextbotImages.splice(num - 1, 1);
-    savedNextbotSounds.splice(num - 1, 1);
-
-    // Get ALL files before any changes
-    const imageFiles = {};
-    const soundFiles = {};
-
-    for (let i = 1; i <= nextbotCount; i++) {
-        const imgInput = document.getElementById(`nextbotImage${i}`);
-        const soundInput = document.getElementById(`nextbotSound${i}`);
-
-        if (imgInput && imgInput.files && imgInput.files[0]) {
-            imageFiles[i] = imgInput.files[0];
-        }
-        if (soundInput && soundInput.files && soundInput.files[0]) {
-            soundFiles[i] = soundInput.files[0];
-        }
-    }
-
-    // Remove the entry
-    const entry = document.getElementById(`nextbot-${num}`);
-    if (entry) entry.remove();
-
-    // Clear and rebuild the list
-    const container = document.getElementById('nextbot-list');
-    container.innerHTML = '';
-
-    const newCount = nextbotCount - 1;
-
-    for (let i = 1; i <= newCount; i++) {
-        const entry = document.createElement('div');
-        entry.className = 'nextbot-entry';
-        entry.id = `nextbot-${i}`;
-
-        const removeBtn = i > 1 ? `<button onclick="removeNextbot(${i})" class="remove-btn">✖</button>` : '';
-
-        entry.innerHTML = `
-            <h4>Nextbot #${i} ${removeBtn}</h4>
-            <p>Image:</p>
-            <input type="file" id="nextbotImage${i}" accept="image/*" class="file-input">
-            <p>Sound (optional):</p>
-            <input type="file" id="nextbotSound${i}" accept="audio/*" class="file-input">
-            <hr>
-        `;
-
-        container.appendChild(entry);
-
-        // Determine where the file should come from
-        let sourceNum = i;
-        if (i >= num) {
-            sourceNum = i + 1;
-        }
-
-        // Restore image file
-        if (imageFiles[sourceNum]) {
-            const dt = new DataTransfer();
-            dt.items.add(imageFiles[sourceNum]);
-            document.getElementById(`nextbotImage${i}`).files = dt.files;
-            savedNextbotImages[i - 1] = imageFiles[sourceNum];
-        }
-
-        // Restore sound file
-        if (soundFiles[sourceNum]) {
-            const dt = new DataTransfer();
-            dt.items.add(soundFiles[sourceNum]);
-            document.getElementById(`nextbotSound${i}`).files = dt.files;
-            savedNextbotSounds[i - 1] = soundFiles[sourceNum];
-        }
-
-        // Re-attach event listeners
-        document.getElementById(`nextbotImage${i}`).addEventListener('change', async (e) => {
-            if (e.target.files[0]) {
-                savedNextbotImages[i - 1] = e.target.files[0];
-                if (dbReady) await saveFile(`nextbot${i}`, e.target.files[0]);
-            }
-            updatePlayButton();
-        });
-
-        document.getElementById(`nextbotSound${i}`).addEventListener('change', async (e) => {
-            if (e.target.files[0]) {
-                savedNextbotSounds[i - 1] = e.target.files[0];
-                if (dbReady) await saveFile(`nextbotSound${i}`, e.target.files[0]);
-            }
-        });
-    }
-
-    nextbotCount = newCount;
-    updatePlayButton();
-};
 
 
 
