@@ -461,18 +461,29 @@ function setupEventListeners() {
 }
 
 function updatePlayButton() {
-    // Check if at least one nextbot has an image
-    let hasImage = false;
+    // Check if ANY nextbot has an image
+    let hasAnyImage = false;
     let i = 1;
+    
+    // Loop through all nextbot image inputs
     while (document.getElementById(`nextbotImage${i}`)) {
         const input = document.getElementById(`nextbotImage${i}`);
         if (input && input.files && input.files[0]) {
-            hasImage = true;
+            hasAnyImage = true;
+            console.log(`Found image in nextbot slot ${i}`);
             break;
         }
         i++;
     }
-    getElement('playBtn').disabled = !hasImage;
+    
+    // Also check the first nextbot directly (backup)
+    if (!hasAnyImage) {
+        const firstInput = document.getElementById('nextbotImage1');
+        hasAnyImage = !!(firstInput && firstInput.files && firstInput.files[0]);
+    }
+    
+    console.log("Play button enabled:", hasAnyImage);
+    getElement('playBtn').disabled = !hasAnyImage;
 }
 
 function setupAudioContext() {
