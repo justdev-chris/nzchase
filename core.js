@@ -160,7 +160,6 @@ window.removeNextbot = function(num) {
     const container = document.getElementById('nextbot-list');
     container.innerHTML = '';
     
-    // Rebuild all entries with correct IDs
     const newCount = nextbotCount - 1;
     
     for (let i = 1; i <= newCount; i++) {
@@ -219,32 +218,11 @@ window.removeNextbot = function(num) {
             }
         });
     }
-    // workkkkkkkkkkkkk2e4leh3o2.1V
-    nextbotCount = newCount;
-    updatePlayButton();
-};
-        
-        if (soundInput) {
-            soundInput.id = `nextbotSound${newNum}`;
-            let sourceNum = newNum;
-            if (newNum >= num) {
-                sourceNum = newNum + 1;
-            }
-            
-            if (soundFiles[sourceNum]) {
-                const dt = new DataTransfer();
-                dt.items.add(soundFiles[sourceNum]);
-                soundInput.files = dt.files;
-                
-                // Update saved array
-                savedNextbotSounds[newNum-1] = soundFiles[sourceNum];
-            }
-        }
-    });
     
     nextbotCount = newCount;
     updatePlayButton();
 };
+
 
 // ========== INDEXEDDB FUNCTIONS ==========
 async function initDB() {
