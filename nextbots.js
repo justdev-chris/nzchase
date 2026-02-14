@@ -1,7 +1,7 @@
 // ========== NEXTBOTS.JS - NEXTBOT MANAGER ==========
 
 let nextbotSoundIntervals = [];
-let activeSounds = [];
+let activeSounds = new Map(); // Track active sounds per bot
 
 function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) {
     console.log("Creating nextbots...");
@@ -35,13 +35,20 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                     Math.sin(angle) * radius
                 );
                 
-                // Add personality for varied paths (without changing speed)
+                // UNIQUE BOT PERSONALITY - each bot behaves differently
                 bot.userData = {
                     soundIndex: index,
                     lastSoundTime: 0,
-                    wanderOffset: Math.random() * Math.PI * 2, // Random starting angle
-                    wanderStrength: 0.2 + Math.random() * 0.3, // How much they wander 0.2-0.5
-                    sidePreference: (Math.random() - 0.5) * 0.5 // Tendency to go left/right
+                    isPlayingSound: false,
+                    
+                    // Movement personality traits
+                    aggression: 0.5 + Math.random() * 0.8, // 0.5-1.3 - how directly they chase
+                    wanderFreq: 0.5 + Math.random() * 2.0, // 0.5-2.5 - how fast they wander side to side
+                    wanderAmp: 0.2 + Math.random() * 0.8, // 0.2-1.0 - how wide they wander
+                    sideBias: (Math.random() - 0.5) * 1.5, // -0.75 to 0.75 - prefer left/right
+                    
+                    // Visual personality (optional)
+                    color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5) // For debug
                 };
                 
                 bot.castShadow = true;
@@ -50,7 +57,7 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                 
                 nextbotsArray.push(bot);
                 botVelocitiesArray.push(0);
-                console.log(`Bot ${index} spawned`);
+                console.log(`Bot ${index} spawned with aggression ${bot.userData.aggression.toFixed(2)}`);
             },
             undefined,
             function(error) {
@@ -70,9 +77,11 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                 bot.userData = {
                     soundIndex: index,
                     lastSoundTime: 0,
-                    wanderOffset: Math.random() * Math.PI * 2,
-                    wanderStrength: 0.2 + Math.random() * 0.3,
-                    sidePreference: (Math.random() - 0.5) * 0.5
+                    isPlayingSound: false,
+                    aggression: 0.5 + Math.random() * 0.8,
+                    wanderFreq: 0.5 + Math.random() * 2.0,
+                    wanderAmp: 0.2 + Math.random() * 0.8,
+                    sideBias: (Math.random() - 0.5) * 1.5
                 };
                 
                 scene.add(bot);
@@ -87,13 +96,16 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
 
 function setupNextbotSounds() {
     console.log("Setting up nextbot sounds");
-    // Just initialize - actual sound checking happens in updateNextbots
+    activeSounds.clear();
 }
 
 function playBotSoundIfClose(bot, camera) {
     const soundIndex = bot.userData.soundIndex;
     
-    // Calculate 2D distance (X and Z only)
+    // Don't play if this bot is already playing a sound
+    if (bot.userData.isPlayingSound) return;
+    
+    // Calculate 2D distance
     const dx = camera.position.x - bot.position.x;
     const dz = camera.position.z - bot.position.z;
     const dist2D = Math.sqrt(dx*dx + dz*dz);
@@ -102,7 +114,6 @@ function playBotSoundIfClose(bot, camera) {
     const now = Date.now();
     const timeSinceLastSound = now - bot.userData.lastSoundTime;
     
-    // Only play if within 20 units and cooldown passed
     if (dist2D <= 20 && timeSinceLastSound > 3000) {
         if (soundIndex >= window.nextbotAudio.length || !window.nextbotAudio[soundIndex]) {
             return;
@@ -112,47 +123,53 @@ function playBotSoundIfClose(bot, camera) {
             const soundBuffer = window.nextbotAudio[soundIndex].buffer;
             if (!soundBuffer) return;
             
-            // Calculate volume based on 2D distance
-            let volume = 0;
-            if (dist2D <= 10) {
-                volume = 1.0;
-            } else if (dist2D <= 16) {
-                volume = 0.6;
-            } else if (dist2D <= 20) {
-                volume = 0.6 * (1 - (dist2D - 16) / 4);
-            } else {
-                return;
-            }
-            
-            console.log(`Bot ${soundIndex} playing at ${dist2D.toFixed(1)} units, volume ${volume.toFixed(2)}`);
-            
+            // Create sound with gain node that we can update
             const source = audioContext.createBufferSource();
             source.buffer = soundBuffer;
             
             const gainNode = audioContext.createGain();
+            
+            // Set initial volume
+            const volume = calculateVolume(dist2D);
             gainNode.gain.value = volume;
             
             source.connect(gainNode);
             gainNode.connect(sfxGain);
             
+            // Mark as playing
+            bot.userData.isPlayingSound = true;
+            bot.userData.lastSoundTime = now;
+            
+            // Store gain node for volume updates
+            activeSounds.set(bot, {
+                source: source,
+                gainNode: gainNode,
+                startTime: now,
+                lastVolume: volume
+            });
+            
+            // When sound ends
             source.onended = () => {
-                activeSounds = activeSounds.filter(s => s.source !== source);
+                bot.userData.isPlayingSound = false;
+                activeSounds.delete(bot);
             };
             
             source.start();
             
-            activeSounds.push({
-                source: source,
-                gainNode: gainNode,
-                bot: bot
-            });
-            
-            bot.userData.lastSoundTime = now;
+            console.log(`Bot ${soundIndex} started sound at ${dist2D.toFixed(1)} units`);
             
         } catch (e) {
             console.error("Error playing sound:", e);
+            bot.userData.isPlayingSound = false;
         }
     }
+}
+
+function calculateVolume(distance) {
+    if (distance <= 10) return 1.0;
+    if (distance <= 16) return 0.6;
+    if (distance <= 20) return 0.6 * (1 - (distance - 16) / 4);
+    return 0.0;
 }
 
 function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSpeed, botSpeedMultiplier) {
@@ -163,15 +180,34 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
     const mapModel = window.currentMapModel || currentMapModel;
     if (!mapModel) return;
     
-    // Use the existing speed slider value
     const currentBotSpeed = baseBotSpeed * botSpeedMultiplier;
     const gravity = -0.03;
     
     window.nextbots.forEach((bot, index) => {
         if (!bot) return;
         
-        // Check sound every frame
-        playBotSoundIfClose(bot, camera);
+        // === UPDATE VOLUME OF ACTIVE SOUNDS IN REAL-TIME ===
+        if (activeSounds.has(bot)) {
+            const soundData = activeSounds.get(bot);
+            
+            // Calculate current 2D distance
+            const dx = camera.position.x - bot.position.x;
+            const dz = camera.position.z - bot.position.z;
+            const dist2D = Math.sqrt(dx*dx + dz*dz);
+            
+            // Update gain node volume
+            const newVolume = calculateVolume(dist2D);
+            soundData.gainNode.gain.value = newVolume;
+            
+            // Log if volume changed significantly
+            if (Math.abs(newVolume - soundData.lastVolume) > 0.1) {
+                console.log(`Bot ${index} volume updated to ${newVolume.toFixed(2)} at distance ${dist2D.toFixed(1)}`);
+                soundData.lastVolume = newVolume;
+            }
+        } else {
+            // Only try to play new sounds if not already playing
+            playBotSoundIfClose(bot, camera);
+        }
         
         // Gravity
         if (window.botVelocities[index] === undefined) window.botVelocities[index] = 0;
@@ -201,32 +237,51 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
             window.botVelocities[index] = 0;
         }
         
-        // === VARIED PATHS WITHOUT CHANGING SPEED ===
+        // === UNIQUE PATHS FOR EACH BOT ===
         
         // Direction to player
         const dirToPlayer = new THREE.Vector3();
         dirToPlayer.subVectors(camera.position, bot.position);
         dirToPlayer.y = 0;
-        dirToPlayer.normalize();
         
-        // Add wandering based on bot's personality
-        // This creates a sine wave movement side-to-side while still moving forward
-        const time = Date.now() * 0.002;
-        const wanderAmount = Math.sin(time + bot.userData.wanderOffset) * bot.userData.wanderStrength;
+        const distanceToPlayer = dirToPlayer.length();
         
-        // Create perpendicular direction (left/right)
-        const perpDir = new THREE.Vector3(-dirToPlayer.z, 0, dirToPlayer.x);
-        
-        // Combine: mostly toward player, slightly wandering side to side
-        const moveDir = new THREE.Vector3();
-        moveDir.copy(dirToPlayer);
-        moveDir.x += perpDir.x * wanderAmount;
-        moveDir.z += perpDir.z * wanderAmount;
-        moveDir.normalize();
-        
-        // Apply movement with original speed (no modification)
-        bot.position.x += moveDir.x * currentBotSpeed;
-        bot.position.z += moveDir.z * currentBotSpeed;
+        if (distanceToPlayer > 1) {
+            dirToPlayer.normalize();
+            
+            // Each bot has unique wandering pattern based on their personality
+            const time = Date.now() * 0.002; // Slow oscillation
+            
+            // Combine multiple factors for unique paths:
+            // 1. Sine wave with unique frequency
+            const wander1 = Math.sin(time * bot.userData.wanderFreq + bot.userData.sideBias) * bot.userData.wanderAmp;
+            
+            // 2. Secondary oscillation for more complex patterns
+            const wander2 = Math.cos(time * (bot.userData.wanderFreq * 0.5) + bot.userData.sideBias * 2) * (bot.userData.wanderAmp * 0.5);
+            
+            // 3. Permanent side bias (some bots always drift left/right)
+            const bias = bot.userData.sideBias * 0.3;
+            
+            // Combine wander amounts
+            const totalWander = wander1 + wander2 + bias;
+            
+            // Create perpendicular direction
+            const perpDir = new THREE.Vector3(-dirToPlayer.z, 0, dirToPlayer.x);
+            
+            // Calculate movement direction
+            const moveDir = new THREE.Vector3();
+            
+            // Aggression determines how directly they chase vs wander
+            // High aggression = more toward player, low aggression = more wandering
+            moveDir.copy(dirToPlayer);
+            moveDir.x += perpDir.x * totalWander * (1.5 - bot.userData.aggression);
+            moveDir.z += perpDir.z * totalWander * (1.5 - bot.userData.aggression);
+            moveDir.normalize();
+            
+            // Apply speed
+            bot.position.x += moveDir.x * currentBotSpeed;
+            bot.position.z += moveDir.z * currentBotSpeed;
+        }
         
         // Face player
         bot.lookAt(camera.position);
@@ -245,10 +300,11 @@ function cleanupNextbotSounds() {
     nextbotSoundIntervals.forEach(interval => clearInterval(interval));
     nextbotSoundIntervals = [];
     
-    activeSounds.forEach(sound => {
-        if (sound.source) {
-            try { sound.source.stop(); } catch (e) {}
+    activeSounds.forEach((soundData, bot) => {
+        if (soundData.source) {
+            try { soundData.source.stop(); } catch (e) {}
         }
+        if (bot) bot.userData.isPlayingSound = false;
     });
-    activeSounds = [];
+    activeSounds.clear();
 }
