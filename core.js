@@ -591,17 +591,25 @@ async function startGame() {
         // Collect all nextbot images
         let nextbotURLs = [];
         let i = 1;
+        
+        // Get ALL images from ALL slots
         while (document.getElementById(`nextbotImage${i}`)) {
             const imgInput = document.getElementById(`nextbotImage${i}`);
             if (imgInput && imgInput.files && imgInput.files[0]) {
+                // Only push if there's actually a file
                 const url = URL.createObjectURL(imgInput.files[0]);
                 nextbotURLs.push(url);
                 objectURLs.push(url);
+                console.log(`Added image from slot ${i} to game`);
             }
             i++;
         }
         
+        // FILTER OUT ANY EMPTY/UNDEFINED - THIS IS THE KEY
+        nextbotURLs = nextbotURLs.filter(url => url !== null && url !== undefined);
+        
         console.log(`Starting game with ${nextbotURLs.length} nextbots`);
+        console.log("URLs:", nextbotURLs);
         
         if (nextbotURLs.length === 0) {
             alert("Please add at least one nextbot image!");
