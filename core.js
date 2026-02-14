@@ -544,7 +544,7 @@ function initGame(nextbotURLs) {
     
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111122);
-    scene.fog = new THREE.Fog(0x111122, 30, 200);
+    // scene.fog = new THREE.Fog(0x111122, 30, 200);
 
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, floorY + 2, 0);
