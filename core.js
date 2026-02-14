@@ -544,7 +544,6 @@ function initGame(nextbotURLs) {
     
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111122);
-    // scene.fog = new THREE.Fog(0x111122, 30, 200);
 
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, floorY + 2, 0);
@@ -572,16 +571,19 @@ function initGame(nextbotURLs) {
     
     scene.background = new THREE.Color(0x87CEEB);
 
+    // Load map FIRST, then nextbots will be created INSIDE the load function
     if (saved3DMap) {
-        load3DMap();
+        load3DMap(nextbotURLs); // Pass nextbot URLs to load function
     } else {
-        if (typeof generateMaze === 'function') {
-            generateMaze(scene, mapColliders);
+        // Load default map if no map uploaded
+        if (typeof loadDefaultMap === 'function') {
+            loadDefaultMap(scene, mapColliders, camera, nextbotURLs);
+        } else {
+            // If no default map function, create nextbots anyway
+            if (typeof createAllNextbots === 'function') {
+                createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
+            }
         }
-    }
-
-    if (typeof createAllNextbots === 'function') {
-        createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
     }
 
     if (typeof setupNextbotSounds === 'function') {
@@ -590,6 +592,7 @@ function initGame(nextbotURLs) {
 
     animate();
 }
+
 
 function setupMouseControls() {
     const canvas = renderer.domElement;
@@ -659,7 +662,7 @@ function checkMapCollision(newPosition) {
     return intersects.length > 0;
 }
 
-function load3DMap() {
+function load3DMap(nextbotURLs) {
     const loadingEl = getElement('loading');
     loadingEl.textContent = 'Loading 3D Map...';
 
@@ -675,7 +678,12 @@ function load3DMap() {
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
         
+        // GET FLOOR HEIGHT
+        const floorY = box.min.y;
+        console.log("Map floor at y:", floorY);
+        
         scene.add(model);
+        window.currentMapModel = model;
         currentMapModel = model;
         mapBounds = box;
         
@@ -691,8 +699,15 @@ function load3DMap() {
             scene.add(floor);
         }
         
-        camera.position.set(0, 5, 0);
+        // SPAWN ON FLOOR
+        camera.position.set(0, floorY + 5, 0);
         lastPosition.copy(camera.position);
+        console.log("Spawned at y:", camera.position.y);
+        
+        // Create nextbots AFTER map is loaded
+        if (typeof createAllNextbots === 'function') {
+            createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
+        }
         
         URL.revokeObjectURL(objectURL);
         loadingEl.textContent = 'Ready';
@@ -701,8 +716,12 @@ function load3DMap() {
     const onModelError = (err) => {
         console.error("Load error:", err);
         URL.revokeObjectURL(objectURL);
-        if (typeof generateMaze === 'function') generateMaze(scene, mapColliders);
         loadingEl.textContent = 'Error';
+        
+        // Still create nextbots even if map fails
+        if (typeof createAllNextbots === 'function') {
+            createAllNextbots(nextbotURLs, scene, window.nextbots, window.botVelocities);
+        }
     };
 
     if (fileExtension === 'gltf' || fileExtension === 'glb') {
@@ -765,19 +784,28 @@ function animate() {
         playerVelocityY += gravity;
         const newVerticalPos = camera.position.y + playerVelocityY;
         
-        const downRay = new THREE.Raycaster(
-            new THREE.Vector3(camera.position.x, camera.position.y + 1, camera.position.z),
-            new THREE.Vector3(0, -1, 0),
-            0,
-            5
-        );
-        
+        // Ground detection
         let groundY = -1000;
+        
         if (currentMapModel) {
+            const downRay = new THREE.Raycaster(
+                new THREE.Vector3(camera.position.x, camera.position.y + 100, camera.position.z),
+                new THREE.Vector3(0, -1, 0),
+                0,
+                200
+            );
+            
             const groundHits = downRay.intersectObject(currentMapModel, true);
+            console.log("Player ground hits:", groundHits.length);
+            
             if (groundHits.length > 0) {
                 groundY = groundHits[0].point.y;
+                console.log("Player ground at:", groundY);
             }
+        } else {
+            // No map yet, don't fall
+            groundY = camera.position.y;
+            console.log("No map loaded yet");
         }
         
         if (newVerticalPos <= groundY + 1.8) {
@@ -813,6 +841,7 @@ function animate() {
         renderer.render(scene, camera);
     }
 }
+
 
 window.onresize = () => {
     if (camera && renderer) {
