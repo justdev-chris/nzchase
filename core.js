@@ -6,7 +6,8 @@ let playerVelocityY = 0;
 const gravity = -0.03;
 const floorY = 2.0;
 let isOnGround = true;
-let playerHealth = 100;
+window.playerHealth = 100;
+let gameActive = false;
 
 // Speed variables
 let basePlayerSpeed = 0.35;
@@ -49,17 +50,6 @@ let currentMapModel = null;
 let mapColliders = [];
 let mapBounds = null;
 
-// Spawn picker
-let spawnPickerActive = false;
-let customSpawnPoint = null;
-let spawnPreviewCamera = null;
-let spawnPreviewScene = null;
-let spawnPreviewRenderer = null;
-let raycaster = new THREE.Raycaster();
-let mouse = new THREE.Vector2();
-let spawnMarker = null;
-let spawnRing = null;
-
 // UI helper
 function getElement(id) {
     return document.getElementById(id);
@@ -73,7 +63,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     loadSavedSettings();
-    loadCustomSpawn();
     setupEventListeners();
     setupAudioContext();
     updatePlayButton();
@@ -142,7 +131,6 @@ function saveSettings() {
 
 function clearSavedSettings() {
     localStorage.removeItem('nzchase_settings');
-    localStorage.removeItem('nzchase_spawn');
     
     getElement('playerSpeed').value = 100;
     getElement('jumpHeight').value = 100;
@@ -162,18 +150,6 @@ function clearSavedSettings() {
     getElement('botSpeedValue').textContent = '100%';
     getElement('volumeDisplay').textContent = '50%';
     getElement('mapScaleValue').textContent = '10.0x';
-    
-    // Reset spawn
-    customSpawnPoint = null;
-    getElement('spawnCoordinates').style.display = 'none';
-    if (spawnMarker) {
-        if (scene) {
-            scene.remove(spawnMarker);
-            scene.remove(spawnRing);
-        }
-        spawnMarker = null;
-        spawnRing = null;
-    }
     
     alert("Settings cleared!");
 }
@@ -210,8 +186,6 @@ function setupEventListeners() {
     getElement('map3d').addEventListener('change', (e) => {
         if (e.target.files[0]) {
             saved3DMap = e.target.files[0];
-            // Preload map for spawn picking
-            preloadMapForSpawn(e.target.files[0]);
         }
     });
     
@@ -265,265 +239,11 @@ function setupEventListeners() {
         if (sfxGain) sfxGain.gain.value = e.target.value / 100;
     });
     
-    // Spawn picker buttons
-    getElement('pickSpawnBtn').addEventListener('click', activateSpawnPicker);
-    getElement('resetSpawnBtn').addEventListener('click', resetSpawnPoint);
-    
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Escape' && isMouseLocked && !isDead) {
             togglePause();
         }
     });
-}
-
-function preloadMapForSpawn(file) {
-    const fileExtension = file.name.split('.').pop().toLowerCase();
-    const objectURL = URL.createObjectURL(file);
-    
-    const onLoad = (model) => {
-        currentMapModel = model;
-        currentMapModel.scale.set(mapScale, mapScale, mapScale);
-    };
-    
-    switch(fileExtension) {
-        case 'gltf':
-        case 'glb':
-            const gltfLoader = new THREE.GLTFLoader();
-            gltfLoader.load(objectURL, (gltf) => onLoad(gltf.scene));
-            break;
-        case 'obj':
-            const objLoader = new THREE.OBJLoader();
-            objLoader.load(objectURL, onLoad);
-            break;
-        case 'fbx':
-            const fbxLoader = new THREE.FBXLoader();
-            fbxLoader.load(objectURL, onLoad);
-            break;
-    }
-}
-
-function activateSpawnPicker() {
-    if (!saved3DMap || !currentMapModel) {
-        alert("Please upload a 3D map first and wait for it to load!");
-        return;
-    }
-    
-    spawnPickerActive = true;
-    getElement('pickSpawnBtn').textContent = '🔴 Click on map to set spawn';
-    getElement('pickSpawnBtn').style.background = '#ff5555';
-    
-    // Create preview if not exists
-    if (!spawnPreviewCamera) {
-        createSpawnPreview();
-    }
-    
-    getElement('spawnPreview').style.display = 'block';
-}
-
-function createSpawnPreview() {
-    const container = getElement('spawnPreview');
-    
-    // Setup preview scene
-    spawnPreviewScene = new THREE.Scene();
-    spawnPreviewScene.background = new THREE.Color(0x222222);
-    
-    // Add lights
-    const ambientLight = new THREE.AmbientLight(0x404060);
-    spawnPreviewScene.add(ambientLight);
-    
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(10, 20, 10);
-    spawnPreviewScene.add(directionalLight);
-    
-    // Clone the map model for preview
-    if (currentMapModel) {
-        const previewModel = currentMapModel.clone();
-        spawnPreviewScene.add(previewModel);
-    }
-    
-    // Setup camera
-    spawnPreviewCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-    spawnPreviewCamera.position.set(20, 15, 20);
-    spawnPreviewCamera.lookAt(0, 5, 0);
-    
-    // Setup renderer
-    spawnPreviewRenderer = new THREE.WebGLRenderer({ antialias: true });
-    spawnPreviewRenderer.setSize(container.clientWidth, container.clientHeight);
-    spawnPreviewRenderer.shadowMap.enabled = true;
-    container.innerHTML = '';
-    container.appendChild(spawnPreviewRenderer.domElement);
-    
-    // Add grid helper
-    const gridHelper = new THREE.GridHelper(50, 20, 0xff3366, 0x333333);
-    spawnPreviewScene.add(gridHelper);
-    
-    // Mouse controls for preview
-    let isDragging = false;
-    let lastMouseX = 0;
-    let lastMouseY = 0;
-    
-    spawnPreviewRenderer.domElement.addEventListener('mousedown', (e) => {
-        if (!spawnPickerActive) return;
-        isDragging = true;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-    });
-    
-    window.addEventListener('mousemove', (e) => {
-        if (!isDragging || !spawnPickerActive || !spawnPreviewCamera) return;
-        
-        const deltaX = e.clientX - lastMouseX;
-        const deltaY = e.clientY - lastMouseY;
-        
-        // Rotate camera around center
-        const radius = 30;
-        const theta = Math.atan2(spawnPreviewCamera.position.z, spawnPreviewCamera.position.x);
-        const phi = Math.acos(spawnPreviewCamera.position.y / radius);
-        
-        const newTheta = theta + deltaX * 0.01;
-        const newPhi = Math.max(0.1, Math.min(Math.PI - 0.1, phi + deltaY * 0.01));
-        
-        spawnPreviewCamera.position.x = radius * Math.sin(newPhi) * Math.cos(newTheta);
-        spawnPreviewCamera.position.y = radius * Math.cos(newPhi);
-        spawnPreviewCamera.position.z = radius * Math.sin(newPhi) * Math.sin(newTheta);
-        
-        spawnPreviewCamera.lookAt(0, 5, 0);
-        
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-    });
-    
-    window.addEventListener('mouseup', () => {
-        isDragging = false;
-    });
-    
-    // Click handler for picking spawn
-    spawnPreviewRenderer.domElement.addEventListener('click', (e) => {
-        if (!spawnPickerActive || !spawnPreviewCamera || !spawnPreviewScene) return;
-        
-        // Calculate mouse position
-        const rect = e.target.getBoundingClientRect();
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-        
-        // Cast ray
-        raycaster.setFromCamera(mouse, spawnPreviewCamera);
-        
-        // Find intersections
-        const intersects = raycaster.intersectObjects(spawnPreviewScene.children, true);
-        
-        if (intersects.length > 0) {
-            const point = intersects[0].point;
-            
-            // Add height offset
-            customSpawnPoint = new THREE.Vector3(point.x, point.y + 2, point.z);
-            
-            // Update UI
-            getElement('spawnX').textContent = customSpawnPoint.x.toFixed(1);
-            getElement('spawnY').textContent = customSpawnPoint.y.toFixed(1);
-            getElement('spawnZ').textContent = customSpawnPoint.z.toFixed(1);
-            getElement('spawnCoordinates').style.display = 'block';
-            
-            // Add marker to preview
-            addSpawnMarkerToPreview(point);
-            
-            // Deactivate picker
-            spawnPickerActive = false;
-            getElement('pickSpawnBtn').textContent = '🎯 Pick Spawn Point';
-            getElement('pickSpawnBtn').style.background = '#ff3366';
-            
-            // Save to settings
-            saveCustomSpawn(customSpawnPoint);
-        }
-    });
-    
-    // Animation loop for preview
-    function animatePreview() {
-        if (spawnPreviewRenderer && spawnPreviewScene && spawnPreviewCamera) {
-            spawnPreviewRenderer.render(spawnPreviewScene, spawnPreviewCamera);
-        }
-        requestAnimationFrame(animatePreview);
-    }
-    animatePreview();
-}
-
-function addSpawnMarkerToPreview(position) {
-    // Remove old marker
-    if (window.previewMarker) {
-        spawnPreviewScene.remove(window.previewMarker);
-        spawnPreviewScene.remove(window.previewRing);
-    }
-    
-    // Create sphere marker
-    const geometry = new THREE.SphereGeometry(1, 16, 16);
-    const material = new THREE.MeshStandardMaterial({ 
-        color: 0xff3366,
-        emissive: 0x440000
-    });
-    const marker = new THREE.Mesh(geometry, material);
-    marker.position.copy(position);
-    
-    // Create ring
-    const ringGeo = new THREE.TorusGeometry(1.5, 0.2, 16, 32);
-    const ringMat = new THREE.MeshStandardMaterial({ color: 0xff3366, emissive: 0x330000 });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.copy(position);
-    
-    window.previewMarker = marker;
-    window.previewRing = ring;
-    
-    spawnPreviewScene.add(marker);
-    spawnPreviewScene.add(ring);
-}
-
-function resetSpawnPoint() {
-    customSpawnPoint = null;
-    getElement('spawnCoordinates').style.display = 'none';
-    
-    // Remove marker from preview
-    if (window.previewMarker && spawnPreviewScene) {
-        spawnPreviewScene.remove(window.previewMarker);
-        spawnPreviewScene.remove(window.previewRing);
-        window.previewMarker = null;
-        window.previewRing = null;
-    }
-    
-    // Remove marker from game if exists
-    if (spawnMarker && scene) {
-        scene.remove(spawnMarker);
-        scene.remove(spawnRing);
-        spawnMarker = null;
-        spawnRing = null;
-    }
-    
-    localStorage.removeItem('nzchase_spawn');
-}
-
-function saveCustomSpawn(point) {
-    const spawnData = {
-        x: point.x,
-        y: point.y,
-        z: point.z
-    };
-    localStorage.setItem('nzchase_spawn', JSON.stringify(spawnData));
-}
-
-function loadCustomSpawn() {
-    const saved = localStorage.getItem('nzchase_spawn');
-    if (saved) {
-        try {
-            const point = JSON.parse(saved);
-            customSpawnPoint = new THREE.Vector3(point.x, point.y, point.z);
-            
-            getElement('spawnX').textContent = point.x.toFixed(1);
-            getElement('spawnY').textContent = point.y.toFixed(1);
-            getElement('spawnZ').textContent = point.z.toFixed(1);
-            getElement('spawnCoordinates').style.display = 'block';
-        } catch (e) {
-            console.error("Failed to load spawn point", e);
-        }
-    }
 }
 
 function updatePlayButton() {
@@ -673,13 +393,14 @@ function returnToMenu() {
 }
 
 function initGame(nextbotURLs) {
+    gameActive = true;
     getElement("menu").style.display = "none";
     getElement("hud").style.display = "block";
     getElement("crosshair").style.display = "block";
     getElement("audioControls").style.display = "block";
     
     isDead = false;
-    playerHealth = 100;
+    window.playerHealth = 100;
     distanceTraveled = 0;
     gameTime = 0;
     mapColliders = [];
@@ -693,18 +414,12 @@ function initGame(nextbotURLs) {
     
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111122);
-    scene.fog = new THREE.Fog(0x111122, 30, 200);
+   // scene.fog = new THREE.Fog(0x111122, 30, 200);
 
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
     
-    // Set spawn position
-    if (customSpawnPoint && saved3DMap) {
-        camera.position.copy(customSpawnPoint);
-        addSpawnMarkerToGame(customSpawnPoint);
-    } else {
-        camera.position.set(0, floorY + 2, 0);
-    }
-    
+    // TEMP spawn - will be moved after map loads
+    camera.position.set(0, floorY + 2, 0);
     camera.rotation.x = 0;
     lastPosition.copy(camera.position);
 
@@ -733,6 +448,8 @@ function initGame(nextbotURLs) {
         if (typeof generateMaze === 'function') {
             generateMaze(scene, mapColliders);
         }
+        // Maze spawn at center
+        camera.position.set(0, floorY + 2, 0);
     }
 
     if (typeof createAllNextbots === 'function') {
@@ -744,25 +461,6 @@ function initGame(nextbotURLs) {
     }
 
     animate();
-}
-
-function addSpawnMarkerToGame(position) {
-    const geometry = new THREE.SphereGeometry(1, 16, 16);
-    const material = new THREE.MeshStandardMaterial({ 
-        color: 0x00ff00,
-        emissive: 0x004400
-    });
-    spawnMarker = new THREE.Mesh(geometry, material);
-    spawnMarker.position.copy(position);
-    
-    const ringGeo = new THREE.TorusGeometry(1.5, 0.2, 16, 32);
-    const ringMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });
-    spawnRing = new THREE.Mesh(ringGeo, ringMat);
-    spawnRing.rotation.x = Math.PI / 2;
-    spawnRing.position.copy(position);
-    
-    scene.add(spawnMarker);
-    scene.add(spawnRing);
 }
 
 function setupMouseControls() {
@@ -894,25 +592,76 @@ function load3DMap() {
             scene.add(floor);
         }
         
-        model.traverse((child) => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                
-                child.geometry.computeBoundingBox();
-                const bbox = child.geometry.boundingBox.clone();
-                
-                const worldMatrix = new THREE.Matrix4();
-                child.updateMatrixWorld();
-                worldMatrix.copy(child.matrixWorld);
-                bbox.applyMatrix4(worldMatrix);
-                
-                mapColliders.push(bbox);
-            }
-        });
-        
         scene.add(model);
         currentMapModel = model;
+        
+        // ===== SIMPLE COLLISION =====
+mapColliders = [];
+
+model.traverse((child) => {
+    if (child.isMesh) {
+        const name = child.name.toLowerCase();
+        if (name.includes("collision") || name.includes("ucx") || name.includes("proxy")) {
+            return;
+        }
+        
+        child.castShadow = true;
+        child.receiveShadow = true;
+        
+        // Get the world position
+        const worldPos = new THREE.Vector3();
+        child.getWorldPosition(worldPos);
+        
+        // Get the original bounding box
+        child.geometry.computeBoundingBox();
+        const localBox = child.geometry.boundingBox.clone();
+        
+        // Create a new box at the world position with the same size
+        const size = localBox.getSize(new THREE.Vector3());
+        const worldBox = new THREE.Box3(
+            new THREE.Vector3(
+                worldPos.x - size.x/2,
+                worldPos.y - size.y/2,
+                worldPos.z - size.z/2
+            ),
+            new THREE.Vector3(
+                worldPos.x + size.x/2,
+                worldPos.y + size.y/2,
+                worldPos.z + size.z/2
+            )
+        );
+        
+        mapColliders.push(worldBox);
+        
+        // RED BOX
+        const helper = new THREE.Box3Helper(worldBox, 0xff0000);
+        scene.add(helper);
+    }
+});
+        
+        console.log("Created", mapColliders.length, "colliders");
+        
+        function findEmptySpot() {
+            if (!isPositionBlocked(new THREE.Vector3(0, floorY + 2, 0))) {
+                return new THREE.Vector3(0, floorY + 2, 0);
+            }
+            
+            for (let x = -500; x < 500; x += 50) {
+                for (let z = -500; z < 500; z += 50) {
+                    const testPos = new THREE.Vector3(x, floorY + 2, z);
+                    if (!isPositionBlocked(testPos)) {
+                        return testPos;
+                    }
+                }
+            }
+            
+            return new THREE.Vector3(0, 50, 0);
+        }
+        
+        const spawnPos = findEmptySpot();
+        camera.position.copy(spawnPos);
+        lastPosition.copy(spawnPos);
+        console.log("Spawned at:", spawnPos);
         
         getElement('loading').textContent = 'Loading...';
     };
@@ -979,12 +728,14 @@ function animate() {
         
         const oldPosition = camera.position.clone();
         
+        // Try X movement
         const newPositionX = camera.position.clone();
         newPositionX.x += velocity.x;
         if (!checkMapCollision(newPositionX)) {
             camera.position.x = newPositionX.x;
         }
         
+        // Try Z movement
         const newPositionZ = camera.position.clone();
         newPositionZ.z += velocity.z;
         if (!checkMapCollision(newPositionZ)) {
@@ -1015,7 +766,7 @@ function animate() {
         getElement('distance').textContent = Math.floor(distanceTraveled);
         
         if (typeof updateNextbots === 'function') {
-            updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSpeed, botSpeedMultiplier);
+            updateNextbots(camera, window.playerHealth, isDead, showDeathScreen, baseBotSpeed, botSpeedMultiplier);
         }
         
         if (!saved3DMap && typeof mazeSize !== 'undefined' && typeof cellSize !== 'undefined') {
@@ -1027,7 +778,7 @@ function animate() {
         }
         
         getElement('nextbot-count').textContent = window.nextbots ? window.nextbots.length : 0;
-        getElement('health').textContent = Math.max(0, Math.floor(playerHealth));
+        getElement('health').textContent = Math.max(0, Math.floor(window.playerHealth));
     }
     
     if (renderer && scene && camera) {
