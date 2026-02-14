@@ -20,7 +20,7 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
             
             const bot = new THREE.Mesh(botGeometry, botMaterial);
             
-            // Spawn in different positions around the maze
+            // Spawn in different positions around the map
             const angle = (index / imageURLs.length) * Math.PI * 2;
             const radius = 25 + Math.random() * 15;
             bot.position.set(
@@ -95,7 +95,7 @@ function playNextbotSound(botIndex) {
 }
 
 function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSpeed, botSpeedMultiplier) {
-    if (!window.nextbots || !window.botVelocities) return;
+    if (!window.nextbots || !window.botVelocities || !window.currentMapModel) return;
     
     const currentBotSpeed = baseBotSpeed * botSpeedMultiplier;
     const gravity = -0.03;
@@ -113,38 +113,73 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
             window.botVelocities[index] = 0;
         }
         
-        // Move toward player
+        const distanceToPlayer = bot.position.distanceTo(camera.position);
+        
+        // ===== WALL COLLISION FOR NEXTBOTS =====
         const dir = new THREE.Vector3();
         dir.subVectors(camera.position, bot.position).normalize();
         
-        let speed = currentBotSpeed;
-        const distanceToPlayer = bot.position.distanceTo(camera.position);
+        // Raycast to see if there's a wall in the way
+        const botRay = new THREE.Raycaster(bot.position, dir, 0, distanceToPlayer);
+        const wallHits = botRay.intersectObject(window.currentMapModel, true);
         
-        if (distanceToPlayer < 20) {
-            speed *= 2;
+        if (wallHits.length === 0 || wallHits[0].distance > distanceToPlayer - 2) {
+            // No wall or wall is behind player, move normally
+            let speed = currentBotSpeed;
+            
+            if (distanceToPlayer < 20) {
+                speed *= 2;
+            }
+            
+            if (Math.random() < 0.02) {
+                speed *= 3;
+            }
+            
+            dir.y = 0;
+            bot.position.add(dir.multiplyScalar(speed));
+            
+            // Jump randomly
+            if (Math.random() < 0.01 && bot.position.y <= 4.1) {
+                window.botVelocities[index] = 0.6;
+            }
+        } else {
+            // Wall in the way, try to go around
+            console.log("Bot hit wall, going around");
+            
+            // Try left
+            const leftDir = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+            const leftRay = new THREE.Raycaster(bot.position, leftDir, 0, 5);
+            const leftHits = leftRay.intersectObject(window.currentMapModel, true);
+            
+            // Try right
+            const rightDir = new THREE.Vector3(dir.z, 0, -dir.x).normalize();
+            const rightRay = new THREE.Raycaster(bot.position, rightDir, 0, 5);
+            const rightHits = rightRay.intersectObject(window.currentMapModel, true);
+            
+            if (leftHits.length === 0) {
+                // Left is clear
+                bot.position.add(leftDir.multiplyScalar(currentBotSpeed * 0.8));
+            } else if (rightHits.length === 0) {
+                // Right is clear
+                bot.position.add(rightDir.multiplyScalar(currentBotSpeed * 0.8));
+            } else {
+                // Both blocked, move backwards
+                const backDir = dir.clone().negate();
+                bot.position.add(backDir.multiplyScalar(currentBotSpeed * 0.5));
+            }
         }
         
-        if (Math.random() < 0.02) {
-            speed *= 3;
-        }
-        
-        dir.y = 0;
-        bot.position.add(dir.multiplyScalar(speed));
-        
+        // Face the player
         const targetLook = camera.position.clone();
         targetLook.y = bot.position.y;
         bot.lookAt(targetLook);
         
-        if (Math.random() < 0.01 && bot.position.y <= 4.1) {
-            window.botVelocities[index] = 0.6;
-        }
-        
         // Damage player if too close
         if (distanceToPlayer < 4) {
             window.playerHealth = 0;
-            document.getElementById('health').textContent = Math.max(0, Math.floor(playerHealth));
+            document.getElementById('health').textContent = '0';
             
-            const shake = (8 - distanceToPlayer) / 4;
+            const shake = 2;
             camera.position.x += (Math.random() - 0.5) * shake;
             camera.position.z += (Math.random() - 0.5) * shake;
             
@@ -153,15 +188,15 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
                 document.getElementById("hud").style.color = 'white';
             }, 100);
             
-            if (playerHealth <= 0 && !isDead) {
+            if (!isDead) {
                 showDeathScreen();
             }
         }
         
-        // Teleport if too far
-        if (distanceToPlayer > 80 && Math.random() < 0.005) {
+        // Teleport if too far (reduced chance)
+        if (distanceToPlayer > 120 && Math.random() < 0.002) {
             const angle = Math.random() * Math.PI * 2;
-            const teleportDistance = 20 + Math.random() * 30;
+            const teleportDistance = 30 + Math.random() * 40;
             bot.position.set(
                 camera.position.x + Math.cos(angle) * teleportDistance,
                 4,
