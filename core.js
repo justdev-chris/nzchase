@@ -34,7 +34,7 @@ let mapScale = 10.0;
 
 // Audio
 let audioContext;
-let bgMusic;
+let bgMusic = null;
 let masterGain, musicGain, sfxGain;
 let isMuted = false;
 
@@ -71,15 +71,40 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
 
-    await initDB();                 // make sure DB is ready
-    loadSavedSettings();            // load sliders/settings
-    setupDynamicNextbots();         // create DOM first
-    await loadSavedFiles();         // now restore saved files into DOM
-    setupEventListeners();          // UI listeners
-    setupAudioContext();            // audio
-    updatePlayButton();             // enable/disable play
+    await initDB();
+    loadSavedSettings();
+    setupDynamicNextbots();
+    setupFirstNextbotListeners(); // NEW: Attach listeners to first nextbot
+    await loadSavedFiles();
+    setupEventListeners();
+    setupAudioContext();
+    updatePlayButton();
 });
 
+// NEW: Separate function for first nextbot listeners
+function setupFirstNextbotListeners() {
+    const firstImage = document.getElementById('nextbotImage1');
+    const firstSound = document.getElementById('nextbotSound1');
+    
+    if (firstImage) {
+        firstImage.addEventListener('change', async (e) => {
+            if (e.target.files[0]) {
+                savedNextbotImages[0] = e.target.files[0];
+                if (dbReady) await saveFile('nextbot1', e.target.files[0]);
+            }
+            updatePlayButton();
+        });
+    }
+    
+    if (firstSound) {
+        firstSound.addEventListener('change', async (e) => {
+            if (e.target.files[0]) {
+                savedNextbotSounds[0] = e.target.files[0];
+                if (dbReady) await saveFile('nextbotSound1', e.target.files[0]);
+            }
+        });
+    }
+}
 
 // ========== DYNAMIC NEXTBOT UI ==========
 function setupDynamicNextbots() {
@@ -109,7 +134,6 @@ function setupDynamicNextbots() {
             
             container.appendChild(entry);
 
-            // ⭐ FREEZE THE INDEX — prevents slot-mixing ⭐
             const index = nextbotCount;
 
             // Image listener
@@ -132,8 +156,6 @@ function setupDynamicNextbots() {
     }
 }
 
-
-
 // ========== NEXTBOT REMOVAL ==========
 window.removeNextbot = function(num) {
     if (num === 1) {
@@ -141,11 +163,7 @@ window.removeNextbot = function(num) {
         return;
     }
 
-    // Remove saved entries so arrays stay aligned
-    savedNextbotImages.splice(num - 1, 1);
-    savedNextbotSounds.splice(num - 1, 1);
-
-    // Capture all current file inputs BEFORE rebuilding
+    // FIXED: Capture files FIRST before modifying arrays
     const imageFiles = {};
     const soundFiles = {};
 
@@ -156,6 +174,10 @@ window.removeNextbot = function(num) {
         if (img?.files?.[0]) imageFiles[i] = img.files[0];
         if (snd?.files?.[0]) soundFiles[i] = snd.files[0];
     }
+
+    // THEN modify saved arrays
+    savedNextbotImages.splice(num - 1, 1);
+    savedNextbotSounds.splice(num - 1, 1);
 
     // Remove the DOM entry
     const entry = document.getElementById(`nextbot-${num}`);
@@ -205,7 +227,7 @@ window.removeNextbot = function(num) {
             savedNextbotSounds[i - 1] = soundFiles[sourceNum];
         }
 
-        // ⭐ Reattach listeners with frozen index ⭐
+        // Reattach listeners with frozen index
         const index = i;
 
         document.getElementById(`nextbotImage${index}`).addEventListener('change', async (e) => {
@@ -228,9 +250,6 @@ window.removeNextbot = function(num) {
     updatePlayButton();
 };
 
-
-
-
 // ========== INDEXEDDB FUNCTIONS ==========
 async function initDB() {
     return new Promise((resolve, reject) => {
@@ -239,6 +258,7 @@ async function initDB() {
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
             db = request.result;
+            dbReady = true; // FIXED: Added this line
             resolve();
         };
         
@@ -350,6 +370,23 @@ async function loadSavedFiles() {
         `;
 
         container.appendChild(entry);
+        
+        // Add listeners for newly created entries
+        const index = nextbotCount;
+        document.getElementById(`nextbotImage${index}`).addEventListener('change', async (e) => {
+            if (e.target.files[0]) {
+                savedNextbotImages[index - 1] = e.target.files[0];
+                if (dbReady) await saveFile(`nextbot${index}`, e.target.files[0]);
+            }
+            updatePlayButton();
+        });
+
+        document.getElementById(`nextbotSound${index}`).addEventListener('change', async (e) => {
+            if (e.target.files[0]) {
+                savedNextbotSounds[index - 1] = e.target.files[0];
+                if (dbReady) await saveFile(`nextbotSound${index}`, e.target.files[0]);
+            }
+        });
     }
 
     // Restore files into DOM
@@ -372,7 +409,6 @@ async function loadSavedFiles() {
 
     console.log("Saved files loaded successfully");
 }
-
 
 function loadSavedSettings() {
     const savedSettings = localStorage.getItem('nzchase_settings');
@@ -462,8 +498,6 @@ function clearSavedSettings() {
 }
 
 function setupEventListeners() {
-    // Nextbot inputs are handled by dynamic UI
-    
     getElement('bgMusic').addEventListener('change', async (e) => {
         if (e.target.files[0]) {
             savedBgMusic = e.target.files[0];
@@ -536,7 +570,7 @@ function setupEventListeners() {
 }
 
 function updatePlayButton() {
-    const btn = document.getElementById('play-btn');
+    const btn = document.getElementById('playBtn'); // FIXED: Was 'play-btn' but ID is 'playBtn'
     if (!btn) return;
 
     let hasImage = false;
@@ -552,7 +586,6 @@ function updatePlayButton() {
     btn.disabled = !hasImage;
     console.log("Play button enabled:", hasImage);
 }
-
 
 function setupAudioContext() {
     try {
@@ -583,6 +616,16 @@ async function startGame() {
         objectURLs.forEach(url => URL.revokeObjectURL(url));
         objectURLs = [];
         
+        // Stop previous background music if playing
+        if (bgMusic && bgMusic.stop) {
+            try {
+                bgMusic.stop();
+            } catch (e) {
+                console.log("Error stopping music:", e);
+            }
+            bgMusic = null;
+        }
+        
         // Collect all nextbot images
         let nextbotURLs = [];
         let i = 1;
@@ -591,7 +634,6 @@ async function startGame() {
         while (document.getElementById(`nextbotImage${i}`)) {
             const imgInput = document.getElementById(`nextbotImage${i}`);
             if (imgInput && imgInput.files && imgInput.files[0]) {
-                // Only push if there's actually a file
                 const url = URL.createObjectURL(imgInput.files[0]);
                 nextbotURLs.push(url);
                 objectURLs.push(url);
@@ -600,11 +642,10 @@ async function startGame() {
             i++;
         }
         
-        // FILTER OUT ANY EMPTY/UNDEFINED - THIS IS THE KEY
+        // FILTER OUT ANY EMPTY/UNDEFINED
         nextbotURLs = nextbotURLs.filter(url => url !== null && url !== undefined);
         
         console.log(`Starting game with ${nextbotURLs.length} nextbots`);
-        console.log("URLs:", nextbotURLs);
         
         if (nextbotURLs.length === 0) {
             alert("Please add at least one nextbot image!");
@@ -633,10 +674,6 @@ async function loadAudioFiles() {
     if (!audioContext) return;
     
     const bgMusicFile = getElement('bgMusic').files[0];
-    
-    if (bgMusic) {
-        bgMusic.stop();
-    }
     
     if (bgMusicFile) {
         bgMusic = await loadAudioFile(bgMusicFile, musicGain);
@@ -667,6 +704,8 @@ function loadAudioFile(file, destination) {
                 source.buffer = buffer;
                 source.connect(destination);
                 resolve(source);
+            }, function() {
+                resolve(null);
             });
         };
         reader.readAsArrayBuffer(file);
@@ -978,7 +1017,6 @@ function animate() {
         getElement('speed').textContent = currentSpeed;
         
         playerVelocityY += gravity;
-        const newVerticalPos = camera.position.y + playerVelocityY;
         
         let groundY = -1000;
         
@@ -996,6 +1034,8 @@ function animate() {
                 groundY = groundHits[0].point.y;
             }
         }
+        
+        const newVerticalPos = camera.position.y + playerVelocityY;
         
         if (newVerticalPos <= groundY + 1.8) {
             camera.position.y = groundY + 1.8;
