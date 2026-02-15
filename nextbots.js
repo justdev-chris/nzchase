@@ -13,25 +13,6 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
     const hasGifSupport = typeof THREE.GifTexture !== 'undefined';
     console.log("GIF support:", hasGifSupport);
     
-    // Define different movement PATTERNS for each bot (NO COLORS)
-    const movementPatterns = [
-        'direct',      // Straight line to player
-        'circling',    // Circles around player while approaching
-        'zigzag',      // Zigzags left and right
-        'flanking',    // Tries to get behind player
-        'erratic',     // Random unpredictable movements
-        'stalker',     // Moves slowly when close, fast when far
-        'charger',     // Charges in straight lines, then pauses
-        'spiral',      // Spiral pattern inward
-        'bouncing',    // Bounces off walls/other bots
-        'patience',    // Waits at distance then rushes
-        'jitter',      // Constantly jitters while moving
-        'archer',      // Moves in arcs
-        'predator',    // Predicts player movement
-        'fearful',     // Backs away then charges
-        'swarmer'      // Tries to surround player
-    ];
-    
     imageURLs.forEach((url, index) => {
         const createBotWithTexture = (texture) => {
             if (!texture) {
@@ -65,37 +46,48 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                     Math.sin(angle) * radius
                 );
                 
-                // Pick a movement pattern
-                const patternIndex = index % movementPatterns.length;
-                const pattern = movementPatterns[patternIndex];
+                // Create ACTUAL different paths by giving each bot unique:
+                // 1. Waypoint system (they navigate through different points)
+                // 2. Preferred approach angles
+                // 3. Obstacle avoidance priorities
+                // 4. Flanking behaviors
                 
-                // Bot personality for COMPLETELY DIFFERENT paths (NO COLORS)
+                const pathType = Math.floor(Math.random() * 5); // 0-4
+                
                 bot.userData = {
                     soundIndex: index,
                     lastSoundTime: 0,
                     isPlayingSound: false,
                     
-                    // Movement pattern
-                    pattern: pattern,
+                    // PATH TYPE - completely different routes
+                    pathType: pathType,
                     
-                    // UNIQUE BEHAVIOR PARAMETERS (only movement-related)
-                    aggression: 0.3 + Math.random() * 0.9, // 0.3-1.2
-                    speed: 0.8 + Math.random() * 0.7,      // 0.8-1.5 speed multiplier
-                    wanderFreq: 0.2 + Math.random() * 2.5, // 0.2-2.7
-                    wanderAmp: 0.1 + Math.random() * 1.2,  // 0.1-1.3
-                    sideBias: (Math.random() - 0.5) * 2.0, // -1.0 to 1.0
+                    // PATHFINDING PARAMETERS
+                    // Type 0: Direct - straight line (aggressive)
+                    // Type 1: Left flank - always approaches from left side
+                    // Type 2: Right flank - always approaches from right side
+                    // Type 3: Wide loops - takes long弧形 paths
+                    // Type 4: Stalker - hides behind obstacles
                     
-                    // Pattern-specific properties
-                    phase: Math.random() * Math.PI * 2,
-                    lastCharge: 0,
-                    chargeCooldown: 2000 + Math.random() * 3000,
-                    lastDirection: new THREE.Vector3(1, 0, 0),
-                    preferredDistance: 5 + Math.random() * 12,
-                    hesitation: Math.random() * 0.5,
+                    // For left/right flanking
+                    flankDirection: pathType === 1 ? -1 : (pathType === 2 ? 1 : 0),
                     
-                    // For tracking
-                    lastPlayerPos: new THREE.Vector3(),
-                    predictionVector: new THREE.Vector3(),
+                    // For waypoint navigation
+                    waypoints: generateWaypoints(pathType, bot.position.clone(), radius),
+                    currentWaypoint: 0,
+                    
+                    // For wide loops
+                    loopRadius: 15 + Math.random() * 20,
+                    loopAngle: Math.random() * Math.PI * 2,
+                    loopSpeed: 0.002 + Math.random() * 0.003,
+                    
+                    // For stalking
+                    hidingSpot: null,
+                    lastSeenPlayer: null,
+                    
+                    // General
+                    aggression: 0.5 + Math.random() * 0.8,
+                    speed: 0.8 + Math.random() * 0.4,
                     
                     isGif: texture.isGIF || false
                 };
@@ -106,15 +98,14 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                 
                 nextbotsArray.push(bot);
                 botVelocitiesArray.push(0);
-                console.log(`Bot ${index} spawned with ${pattern} pattern ${bot.userData.isGif ? '(GIF)' : '(static)'}`);
+                console.log(`Bot ${index} spawned with PATH TYPE ${pathType} ${bot.userData.isGif ? '(GIF)' : '(static)'}`);
             };
             
             checkTexture();
         };
         
         const createFallbackBot = (idx, scene, botsArray, velocitiesArray) => {
-            const patternIndex = idx % movementPatterns.length;
-            const pattern = movementPatterns[patternIndex];
+            const pathType = Math.floor(Math.random() * 5);
             
             const botGeometry = new THREE.BoxGeometry(3, 3, 3);
             const botMaterial = new THREE.MeshLambertMaterial({ color: 0xff00ff });
@@ -132,27 +123,24 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                 soundIndex: idx,
                 lastSoundTime: 0,
                 isPlayingSound: false,
-                pattern: pattern,
-                aggression: 0.3 + Math.random() * 0.9,
-                speed: 0.8 + Math.random() * 0.7,
-                wanderFreq: 0.2 + Math.random() * 2.5,
-                wanderAmp: 0.1 + Math.random() * 1.2,
-                sideBias: (Math.random() - 0.5) * 2.0,
-                phase: Math.random() * Math.PI * 2,
-                lastCharge: 0,
-                chargeCooldown: 2000 + Math.random() * 3000,
-                lastDirection: new THREE.Vector3(1, 0, 0),
-                preferredDistance: 5 + Math.random() * 12,
-                hesitation: Math.random() * 0.5,
-                lastPlayerPos: new THREE.Vector3(),
-                predictionVector: new THREE.Vector3(),
+                pathType: pathType,
+                flankDirection: pathType === 1 ? -1 : (pathType === 2 ? 1 : 0),
+                waypoints: generateWaypoints(pathType, bot.position.clone(), radius),
+                currentWaypoint: 0,
+                loopRadius: 15 + Math.random() * 20,
+                loopAngle: Math.random() * Math.PI * 2,
+                loopSpeed: 0.002 + Math.random() * 0.003,
+                hidingSpot: null,
+                lastSeenPlayer: null,
+                aggression: 0.5 + Math.random() * 0.8,
+                speed: 0.8 + Math.random() * 0.4,
                 isGif: false
             };
             
             scene.add(bot);
             botsArray.push(bot);
             velocitiesArray.push(0);
-            console.log(`Bot ${idx} spawned as fallback cube with ${pattern} pattern`);
+            console.log(`Bot ${idx} spawned as fallback cube with PATH TYPE ${pathType}`);
         };
         
         // Check if it's a GIF
@@ -211,6 +199,59 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
     });
     
     document.getElementById('nextbot-count').textContent = nextbotsArray.length;
+}
+
+// Generate different waypoint paths for each bot type
+function generateWaypoints(pathType, startPos, spawnRadius) {
+    const waypoints = [];
+    const center = new THREE.Vector3(0, 0, 0);
+    
+    switch(pathType) {
+        case 0: // Direct - just go straight to player (no waypoints)
+            return [];
+            
+        case 1: // Left flank - waypoints on left side
+            for (let i = 0; i < 3; i++) {
+                const angle = -Math.PI/4 + (i * Math.PI/4);
+                waypoints.push(new THREE.Vector3(
+                    Math.cos(angle) * (spawnRadius - i * 5),
+                    0,
+                    Math.sin(angle) * (spawnRadius - i * 5)
+                ));
+            }
+            break;
+            
+        case 2: // Right flank - waypoints on right side
+            for (let i = 0; i < 3; i++) {
+                const angle = Math.PI/4 - (i * Math.PI/4);
+                waypoints.push(new THREE.Vector3(
+                    Math.cos(angle) * (spawnRadius - i * 5),
+                    0,
+                    Math.sin(angle) * (spawnRadius - i * 5)
+                ));
+            }
+            break;
+            
+        case 3: // Wide loops - circular path
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                waypoints.push(new THREE.Vector3(
+                    Math.cos(angle) * spawnRadius * 1.5,
+                    0,
+                    Math.sin(angle) * spawnRadius * 1.5
+                ));
+            }
+            break;
+            
+        case 4: // Stalker - hide behind points
+            waypoints.push(new THREE.Vector3(-10, 0, -10));
+            waypoints.push(new THREE.Vector3(10, 0, -10));
+            waypoints.push(new THREE.Vector3(-10, 0, 10));
+            waypoints.push(new THREE.Vector3(10, 0, 10));
+            break;
+    }
+    
+    return waypoints;
 }
 
 function setupNextbotSounds() {
@@ -340,242 +381,139 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
             window.botVelocities[index] = 0;
         }
         
-        // ========== COMPLETELY DIFFERENT PATHFINDING PATTERNS ==========
+        // ========== ACTUAL DIFFERENT PATHS ==========
         
-        // Direction to player
+        // Get bot data
+        const pathType = bot.userData.pathType;
+        const speed = globalSpeed * bot.userData.speed;
+        
+        // Direction to player (for reference)
         const dirToPlayer = new THREE.Vector3();
         dirToPlayer.subVectors(camera.position, bot.position);
         dirToPlayer.y = 0;
-        
         const distanceToPlayer = dirToPlayer.length();
         
-        if (distanceToPlayer > 1) {
-            dirToPlayer.normalize();
+        let targetPosition = null;
+        
+        // PATH TYPE 0: DIRECT - Straight line to player
+        if (pathType === 0) {
+            targetPosition = camera.position.clone();
+        }
+        
+        // PATH TYPE 1: LEFT FLANK - Always approach from left
+        else if (pathType === 1) {
+            const leftOffset = new THREE.Vector3(-dirToPlayer.z, 0, dirToPlayer.x).normalize().multiplyScalar(8);
+            targetPosition = camera.position.clone().add(leftOffset);
+        }
+        
+        // PATH TYPE 2: RIGHT FLANK - Always approach from right
+        else if (pathType === 2) {
+            const rightOffset = new THREE.Vector3(dirToPlayer.z, 0, -dirToPlayer.x).normalize().multiplyScalar(8);
+            targetPosition = camera.position.clone().add(rightOffset);
+        }
+        
+        // PATH TYPE 3: WIDE LOOPS - Circular path around player
+        else if (pathType === 3) {
+            bot.userData.loopAngle += bot.userData.loopSpeed;
+            const loopRadius = bot.userData.loopRadius * (0.8 + Math.sin(now * 0.001) * 0.2);
             
-            // Get bot's unique pattern
-            const pattern = bot.userData.pattern;
-            const speed = globalSpeed * (bot.userData.speed || 1.0);
+            targetPosition = new THREE.Vector3(
+                camera.position.x + Math.cos(bot.userData.loopAngle) * loopRadius,
+                0,
+                camera.position.z + Math.sin(bot.userData.loopAngle) * loopRadius
+            );
+        }
+        
+        // PATH TYPE 4: STALKER - Use waypoints, move when player not looking
+        else if (pathType === 4) {
+            // Check if player is looking at bot
+            const lookDir = new THREE.Vector3();
+            camera.getWorldDirection(lookDir);
+            const toBot = new THREE.Vector3().subVectors(bot.position, camera.position).normalize();
+            const dot = lookDir.dot(toBot);
             
-            // Initialize move direction
-            let moveDir = new THREE.Vector3();
-            
-            // ===== DIFFERENT PATHFINDING FOR EACH PATTERN =====
-            
-            if (pattern === 'direct') {
-                // Simplest - straight line to player
-                moveDir.copy(dirToPlayer);
-                
-            } else if (pattern === 'circling') {
-                // Circles around player while slowly closing in
-                const circleRadius = 8 + Math.sin(now * 0.001) * 3;
-                const circleSpeed = 0.02;
-                const angle = now * circleSpeed + bot.userData.phase;
-                
-                const circlePos = new THREE.Vector3(
-                    camera.position.x + Math.cos(angle) * circleRadius,
-                    0,
-                    camera.position.z + Math.sin(angle) * circleRadius
-                );
-                
-                moveDir.subVectors(circlePos, bot.position);
-                moveDir.y = 0;
-                moveDir.normalize();
-                
-            } else if (pattern === 'zigzag') {
-                // Zigzags left and right
-                const perpDir = new THREE.Vector3(-dirToPlayer.z, 0, dirToPlayer.x);
-                const zigzag = Math.sin(now * 0.005 + bot.userData.phase) * 1.5;
-                
-                moveDir.copy(dirToPlayer);
-                moveDir.x += perpDir.x * zigzag;
-                moveDir.z += perpDir.z * zigzag;
-                
-            } else if (pattern === 'flanking') {
-                // Tries to get behind player
-                const behindPlayer = new THREE.Vector3(
-                    camera.position.x - dirToPlayer.x * 5,
-                    0,
-                    camera.position.z - dirToPlayer.z * 5
-                );
-                
-                moveDir.subVectors(behindPlayer, bot.position);
-                moveDir.y = 0;
-                moveDir.normalize();
-                
-                // Blend with direct approach
-                moveDir.lerp(dirToPlayer, 0.3);
-                
-            } else if (pattern === 'erratic') {
-                // Random unpredictable movements
-                const randomAngle = Math.sin(now * 0.01 + bot.userData.phase) * 
-                                   Math.cos(now * 0.007) * 2;
-                
-                const perpDir = new THREE.Vector3(-dirToPlayer.z, 0, dirToPlayer.x);
-                
-                moveDir.copy(dirToPlayer);
-                moveDir.x += perpDir.x * randomAngle;
-                moveDir.z += perpDir.z * randomAngle;
-                
-            } else if (pattern === 'stalker') {
-                // Moves slowly when close, fast when far
-                if (distanceToPlayer < 8) {
-                    moveDir.copy(dirToPlayer).multiplyScalar(0.3);
-                } else if (distanceToPlayer > 20) {
-                    moveDir.copy(dirToPlayer).multiplyScalar(1.8);
-                } else {
-                    moveDir.copy(dirToPlayer);
-                }
-                
-            } else if (pattern === 'charger') {
-                // Charges in straight lines, then pauses
-                if (!bot.userData.lastCharge) bot.userData.lastCharge = now;
-                
-                if (now - bot.userData.lastCharge > bot.userData.chargeCooldown) {
-                    // CHARGE!
-                    bot.userData.lastCharge = now;
-                    bot.userData.chargeCooldown = 2000 + Math.random() * 3000;
-                    
-                    // Store charge direction
-                    bot.userData.lastDirection.copy(dirToPlayer);
-                    moveDir.copy(dirToPlayer).multiplyScalar(3.0);
-                } else if (now - bot.userData.lastCharge < 500) {
-                    // Still charging
-                    moveDir.copy(bot.userData.lastDirection).multiplyScalar(2.0);
-                } else {
-                    // Recovering/hesitating
-                    moveDir.copy(dirToPlayer).multiplyScalar(0.2);
-                }
-                
-            } else if (pattern === 'spiral') {
-                // Spiral pattern inward
-                const spiralRadius = distanceToPlayer * 0.5;
-                const angle = now * 0.003 + bot.userData.phase;
-                
-                const spiralOffset = new THREE.Vector3(
-                    Math.cos(angle) * spiralRadius,
-                    0,
-                    Math.sin(angle) * spiralRadius
-                );
-                
-                const targetPos = new THREE.Vector3().copy(camera.position).add(spiralOffset);
-                moveDir.subVectors(targetPos, bot.position);
-                moveDir.y = 0;
-                
-            } else if (pattern === 'bouncing') {
-                // Bounces off other bots (handled in repulsion)
-                moveDir.copy(dirToPlayer);
-                
-            } else if (pattern === 'patience') {
-                // Waits at distance then rushes
-                if (distanceToPlayer > 15) {
-                    moveDir.copy(dirToPlayer).multiplyScalar(0.1);
-                } else {
-                    moveDir.copy(dirToPlayer).multiplyScalar(2.0);
-                }
-                
-            } else if (pattern === 'jitter') {
-                // Constantly jitters while moving
-                const jitterX = (Math.random() - 0.5) * 2;
-                const jitterZ = (Math.random() - 0.5) * 2;
-                
-                moveDir.copy(dirToPlayer);
-                moveDir.x += jitterX;
-                moveDir.z += jitterZ;
-                
-            } else if (pattern === 'archer') {
-                // Moves in arcs
-                const arcAngle = Math.sin(now * 0.002 + bot.userData.phase) * Math.PI/3;
-                const rotatedDir = new THREE.Vector3(
-                    dirToPlayer.x * Math.cos(arcAngle) - dirToPlayer.z * Math.sin(arcAngle),
-                    0,
-                    dirToPlayer.x * Math.sin(arcAngle) + dirToPlayer.z * Math.cos(arcAngle)
-                );
-                
-                moveDir.copy(rotatedDir);
-                
-            } else if (pattern === 'predator') {
-                // Predicts player movement
-                const playerVel = new THREE.Vector3().subVectors(camera.position, bot.userData.lastPlayerPos);
-                bot.userData.lastPlayerPos.copy(camera.position);
-                
-                const predictedPos = new THREE.Vector3().copy(camera.position).add(playerVel.multiplyScalar(2));
-                
-                moveDir.subVectors(predictedPos, bot.position);
-                moveDir.y = 0;
-                
-            } else if (pattern === 'fearful') {
-                // Backs away then charges
-                if (distanceToPlayer < 8) {
-                    // Back away
-                    moveDir.copy(dirToPlayer).multiplyScalar(-1.5);
-                } else if (distanceToPlayer > 20) {
-                    // Charge
-                    moveDir.copy(dirToPlayer).multiplyScalar(2.0);
-                } else {
-                    moveDir.copy(dirToPlayer);
-                }
-                
-            } else if (pattern === 'swarmer') {
-                // Tries to surround player - finds empty spots
-                const angleToPlayer = Math.atan2(dirToPlayer.z, dirToPlayer.x);
-                const targetAngle = angleToPlayer + (index * 0.8); // Spread out
-                
-                const surroundPos = new THREE.Vector3(
-                    camera.position.x + Math.cos(targetAngle) * 7,
-                    0,
-                    camera.position.z + Math.sin(targetAngle) * 7
-                );
-                
-                moveDir.subVectors(surroundPos, bot.position);
-                moveDir.y = 0;
-                
+            // If player looking away, move closer
+            if (dot < 0.3) {
+                targetPosition = camera.position.clone();
             } else {
-                // Default fallback
-                moveDir.copy(dirToPlayer);
+                // Hide behind waypoint
+                if (bot.userData.waypoints && bot.userData.waypoints.length > 0) {
+                    targetPosition = bot.userData.waypoints[bot.userData.currentWaypoint];
+                    
+                    // Move to next waypoint occasionally
+                    if (Math.random() < 0.01) {
+                        bot.userData.currentWaypoint = (bot.userData.currentWaypoint + 1) % bot.userData.waypoints.length;
+                    }
+                } else {
+                    targetPosition = camera.position.clone();
+                }
             }
+        }
+        
+        // Move towards target
+        if (targetPosition) {
+            const moveDir = new THREE.Vector3().subVectors(targetPosition, bot.position);
+            moveDir.y = 0;
             
-            // Normalize move direction
             if (moveDir.length() > 0.1) {
                 moveDir.normalize();
-            }
-            
-            // === BOT REPULSION - KEEP THEM APART ===
-            const repulsionRadius = 10;
-            const repulsionStrength = 0.8;
-            
-            let repulsionX = 0;
-            let repulsionZ = 0;
-            
-            window.nextbots.forEach((otherBot, otherIndex) => {
-                if (otherIndex === index || !otherBot) return;
                 
-                const dx = bot.position.x - otherBot.position.x;
-                const dz = bot.position.z - otherBot.position.z;
-                const dist = Math.sqrt(dx*dx + dz*dz);
-                
-                if (dist < repulsionRadius) {
-                    const force = Math.pow(1 - dist/repulsionRadius, 2) * repulsionStrength;
-                    if (dist > 0.1) {
-                        repulsionX += (dx / dist) * force;
-                        repulsionZ += (dz / dist) * force;
-                    } else {
-                        const randomAngle = Math.random() * Math.PI * 2;
-                        repulsionX += Math.cos(randomAngle) * repulsionStrength;
-                        repulsionZ += Math.sin(randomAngle) * repulsionStrength;
+                // Add some randomness based on path type
+                if (pathType === 0) {
+                    // Direct - minimal randomness
+                } else if (pathType === 1 || pathType === 2) {
+                    // Flankers - add slight perpendicular movement
+                    const perp = new THREE.Vector3(-moveDir.z, 0, moveDir.x);
+                    moveDir.add(perp.multiplyScalar(Math.sin(now * 0.005) * 0.3));
+                    moveDir.normalize();
+                } else if (pathType === 3) {
+                    // Loopers - already on circular path
+                } else if (pathType === 4) {
+                    // Stalkers - stop when being watched
+                    const lookDir = new THREE.Vector3();
+                    camera.getWorldDirection(lookDir);
+                    const toBot = new THREE.Vector3().subVectors(bot.position, camera.position).normalize();
+                    const dot = lookDir.dot(toBot);
+                    
+                    if (dot > 0.5) {
+                        // Player looking - freeze!
+                        moveDir.multiplyScalar(0);
                     }
                 }
-            });
-            
-            // Apply repulsion
-            if (repulsionX !== 0 || repulsionZ !== 0) {
-                moveDir.x += repulsionX * 2;
-                moveDir.z += repulsionZ * 2;
-                moveDir.normalize();
+                
+                // Apply movement
+                bot.position.x += moveDir.x * speed;
+                bot.position.z += moveDir.z * speed;
             }
+        }
+        
+        // === BOT REPULSION - Keep them from stacking ===
+        const repulsionRadius = 8;
+        const repulsionStrength = 0.6;
+        
+        let repulsionX = 0;
+        let repulsionZ = 0;
+        
+        window.nextbots.forEach((otherBot, otherIndex) => {
+            if (otherIndex === index || !otherBot) return;
             
-            // Apply speed
-            bot.position.x += moveDir.x * speed;
-            bot.position.z += moveDir.z * speed;
+            const dx = bot.position.x - otherBot.position.x;
+            const dz = bot.position.z - otherBot.position.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+            
+            if (dist < repulsionRadius) {
+                const force = Math.pow(1 - dist/repulsionRadius, 2) * repulsionStrength;
+                if (dist > 0.1) {
+                    repulsionX += (dx / dist) * force;
+                    repulsionZ += (dz / dist) * force;
+                }
+            }
+        });
+        
+        // Apply repulsion
+        if (repulsionX !== 0 || repulsionZ !== 0) {
+            bot.position.x += repulsionX;
+            bot.position.z += repulsionZ;
         }
         
         // Always look at player
@@ -583,7 +521,7 @@ function updateNextbots(camera, playerHealth, isDead, showDeathScreen, baseBotSp
         
         // Insta-kill
         const dist3D = bot.position.distanceTo(camera.position);
-        if (dist3D < 3) {
+        if (dist3D < 4) {
             window.playerHealth = 0;
             document.getElementById('health').textContent = '0';
             if (!isDead) showDeathScreen();
