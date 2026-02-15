@@ -11,6 +11,7 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
     }
     
     const hasGifSupport = typeof THREE.GifTexture !== 'undefined';
+    console.log("GIF support:", hasGifSupport);
     
     imageURLs.forEach((url, index) => {
         const createBotWithTexture = (texture) => {
@@ -19,44 +20,54 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
                 return;
             }
             
-            const aspect = texture.image ? texture.image.width / texture.image.height : 1;
-            const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
-            const botMaterial = new THREE.MeshLambertMaterial({ 
-                map: texture, 
-                transparent: true,
-                side: THREE.DoubleSide
-            });
-            
-            const bot = new THREE.Mesh(botGeometry, botMaterial);
-            
-            // Spawn at random position
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 15 + Math.random() * 20;
-            bot.position.set(
-                Math.cos(angle) * radius,
-                30,
-                Math.sin(angle) * radius
-            );
-            
-            // Bot personality for varied paths
-            bot.userData = {
-                soundIndex: index,
-                lastSoundTime: 0,
-                isPlayingSound: false,
-                aggression: 0.5 + Math.random() * 0.8,
-                wanderFreq: 0.5 + Math.random() * 2.0,
-                wanderAmp: 0.2 + Math.random() * 0.8,
-                sideBias: (Math.random() - 0.5) * 1.5,
-                isGif: texture.isGIF || false
+            // Wait for texture to have image (for GIFs, might be delayed)
+            const checkTexture = () => {
+                if (!texture.image) {
+                    setTimeout(checkTexture, 50);
+                    return;
+                }
+                
+                const aspect = texture.image.width / texture.image.height || 1;
+                const botGeometry = new THREE.PlaneGeometry(6 * aspect, 6);
+                const botMaterial = new THREE.MeshLambertMaterial({ 
+                    map: texture, 
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+                
+                const bot = new THREE.Mesh(botGeometry, botMaterial);
+                
+                // Spawn at random position
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 15 + Math.random() * 20;
+                bot.position.set(
+                    Math.cos(angle) * radius,
+                    30,
+                    Math.sin(angle) * radius
+                );
+                
+                // Bot personality for varied paths
+                bot.userData = {
+                    soundIndex: index,
+                    lastSoundTime: 0,
+                    isPlayingSound: false,
+                    aggression: 0.5 + Math.random() * 0.8,
+                    wanderFreq: 0.5 + Math.random() * 2.0,
+                    wanderAmp: 0.2 + Math.random() * 0.8,
+                    sideBias: (Math.random() - 0.5) * 1.5,
+                    isGif: texture.isGIF || false
+                };
+                
+                bot.castShadow = true;
+                bot.receiveShadow = true;
+                scene.add(bot);
+                
+                nextbotsArray.push(bot);
+                botVelocitiesArray.push(0);
+                console.log(`Bot ${index} spawned ${bot.userData.isGif ? '(GIF)' : '(static)'}`);
             };
             
-            bot.castShadow = true;
-            bot.receiveShadow = true;
-            scene.add(bot);
-            
-            nextbotsArray.push(bot);
-            botVelocitiesArray.push(0);
-            console.log(`Bot ${index} spawned ${bot.userData.isGif ? '(GIF)' : ''}`);
+            checkTexture();
         };
         
         const createFallbackBot = (idx, scene, botsArray, velocitiesArray) => {
@@ -90,23 +101,45 @@ function createAllNextbots(imageURLs, scene, nextbotsArray, botVelocitiesArray) 
         };
         
         // Check if it's a GIF
-        const isGif = (typeof THREE.GifTexture !== 'undefined' && 
+        const isGif = url.toLowerCase().includes('.gif') || 
+                      (typeof THREE.GifTexture !== 'undefined' && 
                       THREE.GifTexture.isGif && 
-                      THREE.GifTexture.isGif(url)) || 
-                      url.toLowerCase().includes('.gif');
+                      THREE.GifTexture.isGif(url));
         
-        if (isGif && hasGifSupport && typeof THREE.GifTexture !== 'undefined') {
-            // Load as GIF
+        if (isGif && hasGifSupport) {
+            // Load as GIF - FIXED
             console.log(`Loading GIF for bot ${index}:`, url);
-            THREE.GifTexture(url, (texture) => {
-                if (texture) {
-                    createBotWithTexture(texture);
-                } else {
-                    createFallbackBot(index, scene, nextbotsArray, botVelocitiesArray);
+            
+            // THREE.GifTexture returns texture immediately
+            const texture = THREE.GifTexture(url, (loadedTexture) => {
+                // Optional callback when first frame loads
+                console.log(`GIF ${index} first frame loaded`);
+                
+                // Update any bots that might be waiting
+                const existingBot = nextbotsArray[index];
+                if (existingBot && existingBot.material && existingBot.material.map) {
+                    existingBot.material.map = loadedTexture;
+                    existingBot.material.needsUpdate = true;
+                    
+                    // Update geometry aspect ratio if needed
+                    if (loadedTexture.image) {
+                        const aspect = loadedTexture.image.width / loadedTexture.image.height;
+                        const newGeo = new THREE.PlaneGeometry(6 * aspect, 6);
+                        existingBot.geometry.dispose();
+                        existingBot.geometry = newGeo;
+                    }
                 }
             });
+            
+            if (texture) {
+                createBotWithTexture(texture);
+            } else {
+                console.log(`GIF texture creation failed for bot ${index}`);
+                createFallbackBot(index, scene, nextbotsArray, botVelocitiesArray);
+            }
         } else {
             // Load as regular texture
+            console.log(`Loading static image for bot ${index}:`, url);
             const texLoader = new THREE.TextureLoader();
             texLoader.load(url, 
                 (texture) => {
