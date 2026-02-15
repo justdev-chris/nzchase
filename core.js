@@ -107,7 +107,7 @@ function setupDynamicNextbots() {
             
             container.appendChild(entry);
 
-            // ⭐ FREEZE THE INDEX — this is the fix ⭐
+            // ⭐ FREEZE THE INDEX — prevents slot-mixing ⭐
             const index = nextbotCount;
 
             // Image listener
@@ -129,6 +129,102 @@ function setupDynamicNextbots() {
         });
     }
 }
+
+
+
+// ========== NEXTBOT REMOVAL ==========
+window.removeNextbot = function(num) {
+    if (num === 1) {
+        alert("Cannot remove first nextbot!");
+        return;
+    }
+
+    // Remove saved entries so arrays stay aligned
+    savedNextbotImages.splice(num - 1, 1);
+    savedNextbotSounds.splice(num - 1, 1);
+
+    // Capture all current file inputs BEFORE rebuilding
+    const imageFiles = {};
+    const soundFiles = {};
+
+    for (let i = 1; i <= nextbotCount; i++) {
+        const img = document.getElementById(`nextbotImage${i}`);
+        const snd = document.getElementById(`nextbotSound${i}`);
+
+        if (img?.files?.[0]) imageFiles[i] = img.files[0];
+        if (snd?.files?.[0]) soundFiles[i] = snd.files[0];
+    }
+
+    // Remove the DOM entry
+    const entry = document.getElementById(`nextbot-${num}`);
+    if (entry) entry.remove();
+
+    // Rebuild the entire list
+    const container = document.getElementById('nextbot-list');
+    container.innerHTML = '';
+
+    const newCount = nextbotCount - 1;
+
+    for (let i = 1; i <= newCount; i++) {
+        const div = document.createElement('div');
+        div.className = 'nextbot-entry';
+        div.id = `nextbot-${i}`;
+
+        const removeBtn = i > 1 ? `<button onclick="removeNextbot(${i})" class="remove-btn">✖</button>` : '';
+
+        div.innerHTML = `
+            <h4>Nextbot #${i} ${removeBtn}</h4>
+            <p>Image:</p>
+            <input type="file" id="nextbotImage${i}" accept="image/*" class="file-input">
+            <p>Sound (optional):</p>
+            <input type="file" id="nextbotSound${i}" accept="audio/*" class="file-input">
+            <hr>
+        `;
+
+        container.appendChild(div);
+
+        // Determine which old slot maps to this new slot
+        let sourceNum = i;
+        if (i >= num) sourceNum = i + 1;
+
+        // Restore image
+        if (imageFiles[sourceNum]) {
+            const dt = new DataTransfer();
+            dt.items.add(imageFiles[sourceNum]);
+            document.getElementById(`nextbotImage${i}`).files = dt.files;
+            savedNextbotImages[i - 1] = imageFiles[sourceNum];
+        }
+
+        // Restore sound
+        if (soundFiles[sourceNum]) {
+            const dt = new DataTransfer();
+            dt.items.add(soundFiles[sourceNum]);
+            document.getElementById(`nextbotSound${i}`).files = dt.files;
+            savedNextbotSounds[i - 1] = soundFiles[sourceNum];
+        }
+
+        // ⭐ Reattach listeners with frozen index ⭐
+        const index = i;
+
+        document.getElementById(`nextbotImage${index}`).addEventListener('change', async (e) => {
+            if (e.target.files[0]) {
+                savedNextbotImages[index - 1] = e.target.files[0];
+                if (dbReady) await saveFile(`nextbot${index}`, e.target.files[0]);
+            }
+            updatePlayButton();
+        });
+
+        document.getElementById(`nextbotSound${index}`).addEventListener('change', async (e) => {
+            if (e.target.files[0]) {
+                savedNextbotSounds[index - 1] = e.target.files[0];
+                if (dbReady) await saveFile(`nextbotSound${index}`, e.target.files[0]);
+            }
+        });
+    }
+
+    nextbotCount = newCount;
+    updatePlayButton();
+};
 
 
 
