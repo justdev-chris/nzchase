@@ -7,9 +7,20 @@ THREE.GifTexture = function(url, callback) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
+    // Set initial canvas size
+    canvas.width = 64;
+    canvas.height = 64;
+    
+    // Store the animator to prevent garbage collection
+    let animator = null;
+    
     // Check if gifler is available
     if (typeof gifler !== 'undefined') {
-        gifler(url).frames(canvas, (context, frame) => {
+        // Get the animator
+        animator = gifler(url);
+        
+        // Start animating
+        animator.frames(canvas, (context, frame) => {
             // Update canvas dimensions if needed
             if (canvas.width !== frame.width || canvas.height !== frame.height) {
                 canvas.width = frame.width;
@@ -18,17 +29,23 @@ THREE.GifTexture = function(url, callback) {
             
             // Draw the frame
             context.drawImage(frame.buffer, 0, 0);
+            
+            // CRITICAL FIX: Update texture and mark for rendering
+            texture.image = canvas;
             texture.needsUpdate = true;
             
-            // Set image reference for aspect ratio calculation
-            if (!texture.image) {
-                texture.image = canvas;
-            }
+            // Set min/mag filters for better quality
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
         });
+        
+        // Store animator on texture to prevent garbage collection
+        texture.animator = animator;
         
         // Small delay to let first frame load
         setTimeout(() => {
             texture.image = canvas;
+            texture.needsUpdate = true;
             if (callback) callback(texture);
         }, 100);
     } else {
@@ -50,4 +67,11 @@ THREE.GifTexture = function(url, callback) {
 
 THREE.GifTexture.isGif = function(url) {
     return url.toLowerCase().includes('.gif');
+};
+
+// OPTIONAL: Add a method to stop animation if needed
+THREE.GifTexture.stopAnimation = function(texture) {
+    if (texture && texture.animator && texture.animator.stop) {
+        texture.animator.stop();
+    }
 };
