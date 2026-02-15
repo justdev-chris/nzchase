@@ -1,17 +1,17 @@
 // ========== GIF-LOADER.JS - THREE.js GIF Support ==========
 
 THREE.GifTexture = function(url, callback) {
-    const texture = new THREE.Texture();
-    texture.isGIF = true;
-    
+    // Create a canvas element
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Set initial canvas size
     canvas.width = 64;
     canvas.height = 64;
     
-    // Debug: Check if gifler is available
+    // Create texture from canvas immediately
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.isGIF = true;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    
     console.log("GifTexture loading:", url);
     console.log("gifler available:", typeof gifler !== 'undefined');
     
@@ -23,7 +23,7 @@ THREE.GifTexture = function(url, callback) {
             // Get the animator
             const animator = gifler(url);
             
-            // Start animating
+            // Start animating - this updates the canvas directly
             animator.frames(canvas, (context, frame) => {
                 // Update canvas dimensions if needed
                 if (canvas.width !== frame.width || canvas.height !== frame.height) {
@@ -35,46 +35,36 @@ THREE.GifTexture = function(url, callback) {
                 // Draw the frame
                 context.drawImage(frame.buffer, 0, 0);
                 
-                // CRITICAL FIX: Update texture and mark for rendering
-                texture.image = canvas;
+                // CRITICAL: Tell THREE.js the texture needs updating
                 texture.needsUpdate = true;
-                
-                // Set min/mag filters for better quality
-                texture.minFilter = THREE.LinearFilter;
-                texture.magFilter = THREE.LinearFilter;
                 
                 // Log first frame to confirm it's working
                 if (!texture._firstFrameLogged) {
                     console.log("First GIF frame drawn successfully");
                     texture._firstFrameLogged = true;
+                    if (callback) callback(texture);
                 }
             });
             
             // Store animator on texture to prevent garbage collection
             texture.animator = animator;
             
-            // Small delay to let first frame load
-            setTimeout(() => {
-                texture.image = canvas;
-                texture.needsUpdate = true;
-                console.log("GIF texture ready");
-                if (callback) callback(texture);
-            }, 100);
         } catch (e) {
             console.error("Error loading GIF with gifler:", e);
-            fallbackToStaticImage(url, texture, canvas, ctx, callback);
+            fallbackToStaticImage(url, texture, canvas, callback);
         }
     } else {
         console.warn("gifler not loaded, using static image");
-        fallbackToStaticImage(url, texture, canvas, ctx, callback);
+        fallbackToStaticImage(url, texture, canvas, callback);
     }
     
     return texture;
 };
 
-function fallbackToStaticImage(url, texture, canvas, ctx, callback) {
+function fallbackToStaticImage(url, texture, canvas, callback) {
+    const ctx = canvas.getContext('2d');
     const img = new Image();
-    img.crossOrigin = "Anonymous"; // Handle CORS if needed
+    img.crossOrigin = "Anonymous";
     img.onload = () => {
         canvas.width = img.width;
         canvas.height = img.height;
@@ -86,7 +76,6 @@ function fallbackToStaticImage(url, texture, canvas, ctx, callback) {
     };
     img.onerror = (err) => {
         console.error("Failed to load static image:", url, err);
-        // Create a fallback colored texture
         canvas.width = 64;
         canvas.height = 64;
         ctx.fillStyle = "#FF00FF";
@@ -94,7 +83,6 @@ function fallbackToStaticImage(url, texture, canvas, ctx, callback) {
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "12px Arial";
         ctx.fillText("ERROR", 10, 30);
-        texture.image = canvas;
         texture.needsUpdate = true;
         if (callback) callback(texture);
     };
@@ -102,7 +90,7 @@ function fallbackToStaticImage(url, texture, canvas, ctx, callback) {
 }
 
 THREE.GifTexture.isGif = function(url) {
-    return url.toLowerCase().includes('.gif');
+    return url && url.toLowerCase && url.toLowerCase().includes('.gif');
 };
 
 // OPTIONAL: Add a method to stop animation if needed
