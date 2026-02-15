@@ -65,19 +65,21 @@ function getElement(id) {
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     if (typeof THREE === 'undefined') {
         alert("Three.js failed to load! Please refresh the page.");
         return;
     }
-    
-    loadSavedSettings();
-    setupDynamicNextbots();   // must come BEFORE loadSavedFiles
-    loadSavedFiles();         // now the DOM exists
-    setupEventListeners();
-    setupAudioContext();
-    updatePlayButton();
+
+    await initDB();                 // make sure DB is ready
+    loadSavedSettings();            // load sliders/settings
+    setupDynamicNextbots();         // create DOM first
+    await loadSavedFiles();         // now restore saved files into DOM
+    setupEventListeners();          // UI listeners
+    setupAudioContext();            // audio
+    updatePlayButton();             // enable/disable play
 });
+
 
 // ========== DYNAMIC NEXTBOT UI ==========
 function setupDynamicNextbots() {
@@ -304,86 +306,73 @@ async function clearAllFiles() {
 }
 
 async function loadSavedFiles() {
-    try {
-        await initDB();
-        dbReady = true;
-        
-        // Clear existing arrays
-        savedNextbotImages = [];
-        savedNextbotSounds = [];
-        
-        // Load nextbot images - use correct indexing
-        let i = 1;
-        while (i <= MAX_NEXTBOTS) {
-            const file = await loadFile(`nextbot${i}`);
-            if (file) {
-                // Create entry if it doesn't exist
-                if (!document.getElementById(`nextbotImage${i}`) && i > 1) {
-                    document.getElementById('add-nextbot-btn')?.click();
-                }
-                
-                // Store at correct index (i-1)
-                savedNextbotImages[i-1] = file;
-                
-                // Set the file input
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
-                const input = document.getElementById(`nextbotImage${i}`);
-                if (input) {
-                    input.files = dataTransfer.files;
-                    console.log(`Loaded image for nextbot ${i}`);
-                }
-            } else {
-                // Ensure array has null for empty slots
-                if (!savedNextbotImages[i-1]) {
-                    savedNextbotImages[i-1] = null;
-                }
-            }
-            
-            const soundFile = await loadFile(`nextbotSound${i}`);
-            if (soundFile) {
-                savedNextbotSounds[i-1] = soundFile;
-                
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(soundFile);
-                const input = document.getElementById(`nextbotSound${i}`);
-                if (input) {
-                    input.files = dataTransfer.files;
-                    console.log(`Loaded sound for nextbot ${i}`);
-                }
-            } else {
-                if (!savedNextbotSounds[i-1]) {
-                    savedNextbotSounds[i-1] = null;
-                }
-            }
-            
-            i++;
+    if (!db) return;
+
+    console.log("Loading saved files...");
+
+    savedNextbotImages = [];
+    savedNextbotSounds = [];
+
+    let highestSlot = 1;
+
+    for (let i = 1; i <= MAX_NEXTBOTS; i++) {
+        const img = await loadFile(`nextbot${i}`);
+        const snd = await loadFile(`nextbotSound${i}`);
+
+        if (img) {
+            console.log(`Found image in nextbot slot ${i}`);
+            savedNextbotImages[i - 1] = img;
+            highestSlot = Math.max(highestSlot, i);
         }
-        
-        // Load background music
-        const bgFile = await loadFile('bgMusic');
-        if (bgFile) {
-            savedBgMusic = bgFile;
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(bgFile);
-            getElement('bgMusic').files = dataTransfer.files;
+
+        if (snd) {
+            savedNextbotSounds[i - 1] = snd;
+            highestSlot = Math.max(highestSlot, i);
         }
-        
-        // Load map
-        const mapFile = await loadFile('map3d');
-        if (mapFile) {
-            saved3DMap = mapFile;
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(mapFile);
-            getElement('map3d').files = dataTransfer.files;
-        }
-        
-        updatePlayButton();
-        console.log("Saved files loaded successfully");
-    } catch (e) {
-        console.error("Failed to load saved files:", e);
     }
+
+    // Ensure DOM has enough nextbots
+    while (nextbotCount < highestSlot) {
+        nextbotCount++;
+        const container = document.getElementById('nextbot-list');
+
+        const entry = document.createElement('div');
+        entry.className = 'nextbot-entry';
+        entry.id = `nextbot-${nextbotCount}`;
+
+        entry.innerHTML = `
+            <h4>Nextbot #${nextbotCount} ${nextbotCount > 1 ? '<button onclick="removeNextbot(' + nextbotCount + ')" class="remove-btn">✖</button>' : ''}</h4>
+            <p>Image:</p>
+            <input type="file" id="nextbotImage${nextbotCount}" accept="image/*" class="file-input">
+            <p>Sound (optional):</p>
+            <input type="file" id="nextbotSound${nextbotCount}" accept="audio/*" class="file-input">
+            <hr>
+        `;
+
+        container.appendChild(entry);
+    }
+
+    // Restore files into DOM
+    for (let i = 1; i <= highestSlot; i++) {
+        const img = savedNextbotImages[i - 1];
+        const snd = savedNextbotSounds[i - 1];
+
+        if (img) {
+            const dt = new DataTransfer();
+            dt.items.add(img);
+            document.getElementById(`nextbotImage${i}`).files = dt.files;
+        }
+
+        if (snd) {
+            const dt = new DataTransfer();
+            dt.items.add(snd);
+            document.getElementById(`nextbotSound${i}`).files = dt.files;
+        }
+    }
+
+    console.log("Saved files loaded successfully");
 }
+
 
 function loadSavedSettings() {
     const savedSettings = localStorage.getItem('nzchase_settings');
@@ -547,30 +536,23 @@ function setupEventListeners() {
 }
 
 function updatePlayButton() {
-    // Check if ANY nextbot has an image
-    let hasAnyImage = false;
-    let i = 1;
-    
-    // Loop through all nextbot image inputs
-    while (document.getElementById(`nextbotImage${i}`)) {
-        const input = document.getElementById(`nextbotImage${i}`);
-        if (input && input.files && input.files[0]) {
-            hasAnyImage = true;
-            console.log(`Found image in nextbot slot ${i}`);
+    const btn = document.getElementById('play-btn');
+    if (!btn) return;
+
+    let hasImage = false;
+
+    for (let i = 1; i <= nextbotCount; i++) {
+        const imgInput = document.getElementById(`nextbotImage${i}`);
+        if (imgInput?.files?.length > 0) {
+            hasImage = true;
             break;
         }
-        i++;
     }
-    
-    // Also check the first nextbot directly (backup)
-    if (!hasAnyImage) {
-        const firstInput = document.getElementById('nextbotImage1');
-        hasAnyImage = !!(firstInput && firstInput.files && firstInput.files[0]);
-    }
-    
-    console.log("Play button enabled:", hasAnyImage);
-    getElement('playBtn').disabled = !hasAnyImage;
+
+    btn.disabled = !hasImage;
+    console.log("Play button enabled:", hasImage);
 }
+
 
 function setupAudioContext() {
     try {
